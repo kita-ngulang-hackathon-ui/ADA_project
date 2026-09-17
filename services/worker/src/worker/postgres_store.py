@@ -104,6 +104,7 @@ class PostgresPipelineStore:
         self._tenant_id = tenant_id
         self._snapshot_by_user: dict[str, CircleSnapshot] = {}
         self._circle_id_by_str: dict[str, uuid.UUID] = {}
+        self._signal_id_by_str: dict[str, uuid.UUID] = {}
         self._allocation_run_id: uuid.UUID | None = None
         self._alloc_candidate_row_id_by_candidate_id: dict[str, uuid.UUID] = {}
 
@@ -240,7 +241,9 @@ class PostgresPipelineStore:
             for s in signals
         ]
         with self._session() as session:
-            external_signals_repo.insert_signals(session, tenant_id=self._tenant_id, rows=rows)
+            written = external_signals_repo.insert_signals(session, tenant_id=self._tenant_id, rows=rows)
+            for signal, row in zip(signals, written):
+                self._signal_id_by_str[signal.signal_id] = row.id
 
     def load_labeled_examples(self, tenant_id: str) -> list[LabeledExample]:
         with self._session() as session:
@@ -311,7 +314,7 @@ class PostgresPipelineStore:
                 "churn_risk": s.churn_risk,
                 "delta_stability": snap.delta_stability if snap else 0.0,
                 "pattern_type": snap.pattern_type.value if snap else "STABLE",
-                "external_signal_id": uuid.UUID(s.external_signal_id) if s.external_signal_id else None,
+                "external_signal_id": self._signal_id_by_str.get(s.external_signal_id) if s.external_signal_id else None,
                 "external_signal_contribution": s.external_signal_contribution,
                 "context_row_count": s.context_row_count,
                 "features": {},

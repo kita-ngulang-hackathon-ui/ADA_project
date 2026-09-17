@@ -5,6 +5,7 @@ OpenAI-compatible chat completions shape, which most hosted and local providers
 accept. Any failure, timeout, or validator rejection falls back to the template.
 """
 import logging
+import time
 
 import httpx
 from explain import build_prompt, fact_sheet_hash, render_template, validate_narration
@@ -17,28 +18,40 @@ SOURCE_TEMPLATE = "TEMPLATE"
 
 class HttpNarrator:
     def __init__(self, *, base_url: str, model: str, api_key: str | None, timeout_s: float,
-                 temperature: float = 0, max_tokens: int = 220) -> None:
+                 temperature: float = 0, max_tokens: int = 220,
+                 max_retries: int = 3, retry_backoff_s: float = 2.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
         self.timeout_s = timeout_s
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.max_retries = max_retries
+        self.retry_backoff_s = retry_backoff_s
 
     def narrate(self, system: str, user: str) -> str:
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-        response = httpx.post(
-            f"{self.base_url}/chat/completions",
-            headers=headers,
-            timeout=self.timeout_s,
-            json={
-                "model": self.model,
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "messages": [{"role": "system", "content": system},
-                             {"role": "user", "content": user}],
-            },
-        )
+        payload = {
+            "model": self.model,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": user}],
+        }
+        for attempt in range(self.max_retries + 1):
+            response = httpx.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers, timeout=self.timeout_s, json=payload,
+            )
+            # Hosted free tiers rate-limit hard; a short wait recovers the call
+            # instead of silently degrading the whole run to template text.
+            if response.status_code == 429 and attempt < self.max_retries:
+                retry_after = response.headers.get("Retry-After")
+                delay = float(retry_after) if retry_after and retry_after.isdigit() else self.retry_backoff_s * (2 ** attempt)
+                time.sleep(delay)
+                continue
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"].strip()
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 

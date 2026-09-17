@@ -1,14 +1,21 @@
-# [PROJECT NAME TBD]
+# ADA Solutions
 
-Retention and loyalty recommendation engine for Indonesian fintechs.
+Intelligent real-time solutions — retention and loyalty recommendation engine
+for Indonesian fintechs.
 Built for Hackathon UI 2026 (Universitas Indonesia, 17–18 Sep 2026), BNI Ventures
 challenge track: customer retention and transaction loyalty.
 
-Team: Aidam, Randuichi Touya, Abdurrahman Ammar Abqary.
+Team:
+- Muhammad Kaila Aidam Riyan — Backend
+- Randuichi Touya — Backend
+- Abdurrahman Ammar Abqary — Frontend
+- Darryl Ahmad Muaz — Designer/UIUX
+- Arsy Atrisya Dewi — Business specialist
 
-> **Status: skeleton.** Directories, stub files, and implementation guides only.
-> No logic is implemented yet. Each module's `README.md` describes what to build.
-> Source of truth for scope: [`REQUIREMENTS (1).md`](REQUIREMENTS%20(1).md).
+> **Status: implemented, integration in progress.** All L0-L3 packages and services
+> have real logic and tests. Remaining gaps: `apps/web/lib/api.ts` is not wired to
+> the backend (frontend runs on mock data), and `tools/synthetic/generate.py` is
+> unimplemented (demo currently uses hand-authored `fixtures/` data instead).
 
 ## What it does
 
@@ -71,19 +78,16 @@ make test-invariants     # hard guarantees
 
 Requirements: Docker + Docker Compose, `make`, [uv](https://docs.astral.sh/uv/), Node 20+ with pnpm.
 
-## Open decisions (REQUIREMENTS §6)
+## Decisions (REQUIREMENTS §6 — resolved)
 
-- Project name and branding.
-- Incentive catalog (`fixtures/incentives.json`).
-- Frequency-cap threshold (`FREQUENCY_CAP_*`).
-- Whether the paylater/lending tenant gets the relationship-graph signal.
-- External signals: strictly cohort/region-level (default) vs per-user resolution.
-- External source: canned feed vs real API (`EXTERNAL_SIGNAL_SOURCE`).
-- LLM provider and model (`EXPLAIN_LLM_*`).
-- Team role mapping.
+- Project name and branding: **ADA Solutions**.
+- Incentive catalog: single placeholder incentive (prototype scope, no full catalog).
+- Frequency-cap threshold: 2 contacts per 30 days (`FREQUENCY_CAP_MAX_CONTACTS=2`, `FREQUENCY_CAP_WINDOW_DAYS=30`).
+- Relationship-graph signal: enabled, full feature, no tenant carve-out.
+- Demo tenant: single tenant, branded **BNI**, digital wallet/superapp product type (WONDR-style: transfers, split bill, bill autopay, top-up, QR payment).
+- External signals: cohort/region-level only, never per-user.
+- External source: canned feed (`EXTERNAL_SIGNAL_SOURCE=canned`).
+- LLM provider and model: Gemini, `gemini-2.5-flash`.
+- Team role mapping: see Team above.
 
-## Spec documents
 
-The spec images (`spec_*_of_3.png`) contain `ARCHITECTURE.md`, `API_CONTRACTS.md`,
-`PRD.md`, `DECISIONS.md`, `TASKS.md`, `SYNTHETIC_DATA.md`, `DEMO_SCRIPT.md`, and
-`CLAUDE.md`. These are still to be added to the repo as text files.
