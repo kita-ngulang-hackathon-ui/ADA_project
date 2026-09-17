@@ -303,6 +303,9 @@ class PipelineRun(Base):
     id: Mapped[uuid.UUID] = _uuid_pk()
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="QUEUED")
+    # Incremented on every claim. The worker retries up to WORKER_MAX_RETRIES,
+    # counting a crashed (stale RUNNING) claim as one attempt.
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     stages: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     external_source: Mapped[str | None] = mapped_column(String, nullable=True)
     ranking_strategy: Mapped[str | None] = mapped_column(String, nullable=True)
