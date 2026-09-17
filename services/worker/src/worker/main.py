@@ -38,6 +38,7 @@ from persistence.session import make_engine, tenant_session
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from worker.churn_scorer import ChurnScorerUnavailable, load_scorer
 from worker.llm_narrator import narrator_from_settings
 from worker.memory_store import InMemoryStore
 from worker.pipeline import run_pipeline
@@ -174,7 +175,8 @@ def run_offline(args, settings) -> None:
     store, tenant_id = seed_store(args.fixtures, args.tenant_slug, args.events)
     now = datetime.fromisoformat(args.now) if args.now else None
     result = run_pipeline(tenant_id, f"run-{uuid.uuid4().hex[:12]}", store=store, settings=settings,
-                          now=now, narrator=narrator_from_settings(settings))
+                          now=now, narrator=narrator_from_settings(settings),
+                          churn_scorer=churn_scorer)
     json.dump(asdict(result), sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")
     if result.status != "DONE":
@@ -208,3 +210,4 @@ def main(argv: list[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
+# fix

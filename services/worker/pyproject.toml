@@ -19,6 +19,9 @@ dependencies = [
     "persistence",
     "httpx",
     "pydantic-settings",
+    "pandas",
+    "pyarrow",
+    "tabpfn==9.0.0",
 ]
 
 [build-system]

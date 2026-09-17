@@ -12,7 +12,7 @@ from worker.llm_narrator import (
 )
 from worker.outcomes import ingest_outcomes
 from worker.pipeline import run_pipeline
-from worker_world import NOW, WALLET_ID, make_settings
+from worker_world import NOW, WALLET_ID, fake_scorer, make_settings
 
 
 def test_canned_feed_loads_fixture() -> None:
@@ -71,7 +71,7 @@ def _one_fact_sheet(store, settings, monkeypatch):
         return original(sheet, narrator, cache)
 
     monkeypatch.setattr(pipeline_module, "narrate_or_fallback", spy)
-    run_pipeline(WALLET_ID, "run-n", store=store, settings=settings, now=NOW,
+    run_pipeline(WALLET_ID, "run-n", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer(),
                  narrator=_FakeNarrator(RuntimeError("offline")))
     assert all(r.reason_source == SOURCE_TEMPLATE for r in store.recommendations[WALLET_ID].values())
     return captured[0]
@@ -96,7 +96,7 @@ def test_llm_invented_number_falls_back_valid_text_is_used(store, settings, monk
 
 
 def test_outcomes_become_labeled_examples_with_counter(store, settings) -> None:
-    run_pipeline(WALLET_ID, "run-f", store=store, settings=settings, now=NOW)
+    run_pipeline(WALLET_ID, "run-f", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer())
     before = len(store.load_labeled_examples(WALLET_ID))
     snapshots = store.load_feature_snapshots(WALLET_ID)
     outcomes = [

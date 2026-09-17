@@ -7,7 +7,7 @@ API_BASE ?= http://localhost:8000
 # Must be on CONSOLE_DEMO_REVIEWERS; there is no default reviewer (requirement 8).
 REVIEWER ?= ops_reviewer_1
 
-.PHONY: help up down logs migrate seed synthetic reseed pipeline demo test test-invariants lint lint-imports typecheck fmt preflight clean
+.PHONY: help up down logs migrate seed synthetic reseed pipeline demo test test-tabpfn test-invariants lint lint-imports typecheck fmt preflight clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -54,6 +54,9 @@ demo: up migrate seed ## Full bootstrap, then print demo URLs
 test: ## Run the full Python test suite
 	uv run pytest
 
+test-tabpfn: ## Real TabPFN scorer + pipeline integration (needs TABPFN_TOKEN; slow on CPU)
+	uv run pytest -m tabpfn services/worker/tests/test_real_tabpfn.py
+
 test-invariants: ## Run the non-skippable invariant tests
 	uv run pytest tests/invariants
 
@@ -69,6 +72,7 @@ typecheck: ## mypy + tsc
 
 fmt: ## Format Python
 	uv run ruff format .
+
 
 preflight: ## Offline readiness check before the venue (see DEMO_SCRIPT)
 	@set -uo pipefail; \

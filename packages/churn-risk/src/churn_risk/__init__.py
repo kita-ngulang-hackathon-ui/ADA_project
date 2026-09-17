@@ -3,11 +3,19 @@ from churn_risk.attribution import contributions, external_signal_contribution
 from churn_risk.classifier import predict_positive, score
 from churn_risk.context import assert_single_tenant, select_context
 from churn_risk.features import FEATURE_COLUMNS, build_features, to_row
+from churn_risk.snapshot_features import (
+    NEUTRAL_SIGNAL,
+    SNAPSHOT_FEATURE_COLUMNS,
+    build_snapshot_features,
+)
 
 __all__ = [
     "FEATURE_COLUMNS",
+    "NEUTRAL_SIGNAL",
+    "SNAPSHOT_FEATURE_COLUMNS",
     "assert_single_tenant",
     "build_features",
+    "build_snapshot_features",
     "contributions",
     "external_signal_contribution",
     "predict_positive",

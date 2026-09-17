@@ -44,7 +44,8 @@ dev = ["pytest", "pytest-asyncio", "mypy", "ruff", "import-linter"]
 
 [tool.pytest.ini_options]
 testpaths = ["packages", "services", "tests"]
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib -m 'not tabpfn'"
+markers = ["tabpfn: real TabPFN checkpoint over artifacts/ (needs TABPFN_TOKEN; ~11 min on CPU)"]
 
 [tool.ruff]
 line-length = 100
