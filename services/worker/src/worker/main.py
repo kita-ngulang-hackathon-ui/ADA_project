@@ -64,12 +64,14 @@ def stage_error(result) -> str | None:
     return None
 
 
-def execute_run(engine: Engine, tenant_id: str, run_id: uuid.UUID, settings, narrator) -> bool:
+def execute_run(engine: Engine, tenant_id: str, run_id: uuid.UUID, settings, narrator,
+                churn_scorer=None) -> bool:
     """Run one claimed pipeline run. PostgresPipelineStore is built fresh per
     run because its cross-call caches are scoped to exactly one run."""
     store = PostgresPipelineStore(engine, tenant_id)
     try:
-        result = run_pipeline(tenant_id, str(run_id), store=store, settings=settings, narrator=narrator)
+        result = run_pipeline(tenant_id, str(run_id), store=store, settings=settings, narrator=narrator,
+                              churn_scorer=churn_scorer)
         succeeded = result.status == "DONE"
         error = None if succeeded else stage_error(result)
     except Exception as exc:  # one bad run must not kill the worker
@@ -88,7 +90,7 @@ def execute_run(engine: Engine, tenant_id: str, run_id: uuid.UUID, settings, nar
     return succeeded
 
 
-def poll_tenant(engine: Engine, tenant_id: str, settings, narrator) -> int:
+def poll_tenant(engine: Engine, tenant_id: str, settings, narrator, churn_scorer=None) -> int:
     """One tenant's share of a cycle. Returns how many runs were executed."""
     with tenant_session(engine, tenant_id) as session:
         stale = pipeline_repo.reclaim_stale(
@@ -103,11 +105,12 @@ def poll_tenant(engine: Engine, tenant_id: str, settings, narrator) -> int:
         ]
 
     for run_id in claimed:
-        execute_run(engine, tenant_id, run_id, settings, narrator)
+        execute_run(engine, tenant_id, run_id, settings, narrator, churn_scorer)
     return len(claimed)
 
 
-def poll_forever(settings, *, shutdown: threading.Event, max_cycles: int | None = None) -> int:
+def poll_forever(settings, *, shutdown: threading.Event, max_cycles: int | None = None,
+                 churn_scorer=None) -> int:
     if not settings.database_url:
         raise SystemExit("DATABASE_URL is required to poll; use --offline for the fixture pass")
 
@@ -118,7 +121,7 @@ def poll_forever(settings, *, shutdown: threading.Event, max_cycles: int | None 
         while not shutdown.is_set():
             try:
                 worked = sum(
-                    poll_tenant(engine, tenant_id, settings, narrator)
+                    poll_tenant(engine, tenant_id, settings, narrator, churn_scorer)
                     for tenant_id in list_tenant_ids(engine)
                 )
             except Exception:  # a DB blip must not end the service
@@ -171,7 +174,7 @@ def seed_store(fixtures: Path, tenant_slug: str, events_file: Path | None) -> tu
     return store, tenant_id
 
 
-def run_offline(args, settings) -> None:
+def run_offline(args, settings, churn_scorer=None) -> None:
     store, tenant_id = seed_store(args.fixtures, args.tenant_slug, args.events)
     now = datetime.fromisoformat(args.now) if args.now else None
     result = run_pipeline(tenant_id, f"run-{uuid.uuid4().hex[:12]}", store=store, settings=settings,
@@ -196,15 +199,23 @@ def main(argv: list[str] | None = None) -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = WorkerSettings()
+    # Load the trained scorer once per process, before any run; it stays resident in memory.
+    churn_scorer = None
+    if settings.churn_scorer_enabled:
+        try:
+            churn_scorer = load_scorer(settings)
+        except ChurnScorerUnavailable as exc:
+            raise SystemExit(f"worker startup failed: {exc}") from exc
 
     if args.offline:
-        run_offline(args, settings)
+        run_offline(args, settings, churn_scorer)
         return
 
     shutdown = threading.Event()
     install_signal_handlers(shutdown)
     log.info("worker polling every %ss", settings.worker_poll_interval_seconds)
-    executed = poll_forever(settings, shutdown=shutdown, max_cycles=args.max_cycles)
+    executed = poll_forever(settings, shutdown=shutdown, max_cycles=args.max_cycles,
+                            churn_scorer=churn_scorer)
     log.info("worker stopped after %s run(s)", executed)
 
 
