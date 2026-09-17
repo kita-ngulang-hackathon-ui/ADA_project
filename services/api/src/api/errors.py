@@ -4,8 +4,13 @@
 """
 from __future__ import annotations
 
+import logging
+
+from fastapi.exceptions import RequestValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+log = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
@@ -77,5 +82,18 @@ async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
     return _envelope(request, exc)
 
 
+async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """FastAPI's own 422 body is not the documented envelope, so request
+    validation reports VALIDATION_FAILED like every other bad input."""
+    return _envelope(
+        request, validation_failed("Request body or parameters failed validation",
+                                   {"errors": exc.errors()}),
+    )
+
+
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    return _envelope(request, internal(f"{type(exc).__name__}: {exc}"))
+    # The message stays generic: exception text carries SQL, table names and
+    # occasionally values. The request_id ties the response to this log line.
+    request_id = getattr(request.state, "request_id", None) or "unknown"
+    log.exception("unhandled error on %s %s (request_id=%s)", request.method, request.url.path, request_id)
+    return _envelope(request, internal())

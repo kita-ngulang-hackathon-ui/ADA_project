@@ -33,7 +33,7 @@ def list_external_signals(
     scope_type: str | None = Query(default=None),
     scope_key: str | None = Query(default=None),
     signal_type: str | None = Query(default=None),
-    limit: int = Query(default=50, le=500),
+    limit: int = Query(default=50, ge=1, le=500),
     console: ConsoleSession = Depends(require_console_reviewer),
 ) -> SignalList:
     with db_for_tenant(console.tenant_id) as session:

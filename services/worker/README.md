@@ -32,7 +32,7 @@ reading/writing the DB, fetching the external feed, calling the LLM.
 | `src/worker/store.py` | `PipelineStore` Protocol: everything the pipeline reads and writes. No approve/reject/deliver method exists. |
 | `src/worker/memory_store.py` | `InMemoryStore` implementing the Protocol, tenant-isolated. Used by tests and the offline CLI until the Postgres store lands. |
 | `src/worker/churn_scorer.py` | `ChurnRiskScorer`: verifies artifact hashes and schema, fits TabPFN once on `split == "context"` rows, validates candidates, returns `{user_id, churn_risk, as_of}`. `python -m worker.churn_scorer --verify` checks the bundle. Needs `TABPFN_TOKEN` (or a cached checkpoint); for GPU install the cu128 torch wheel first. |
-| `src/worker/outcomes.py` | Turn outcome events into labeled examples via `feedback`, persist them, update the counter. |
+| `src/worker/outcomes.py` | Turn outcome events into labeled examples via `feedback`, persist them, update the counter. Runs as the pipeline's FEEDBACK stage, before anything scores. |
 
 ## Tests to write
 - Pipeline on the seeded fixture produces `PENDING_APPROVAL` rows and no `APPROVED` rows.

@@ -37,8 +37,8 @@ def list_users(
     pattern_type: str | None = Query(default=None),
     segment: str | None = Query(default=None),
     min_churn_risk: float | None = Query(default=None),
-    limit: int = Query(default=50, le=500),
-    cursor: int = Query(default=0),
+    limit: int = Query(default=50, ge=1, le=500),
+    cursor: int = Query(default=0, ge=0),
     console: ConsoleSession = Depends(require_console_reviewer),
 ) -> UserList:
     with db_for_tenant(console.tenant_id) as session:

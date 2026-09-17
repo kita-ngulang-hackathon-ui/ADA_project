@@ -1,4 +1,6 @@
-"""Client ingestion API (`/v1`, requirement 1). Bearer API key -> app_worker.
+"""Client ingestion API (`/v1`, requirement 1). Bearer API key -> tenant; every
+write here runs on the worker-role engine (`db_for_ingest`), the only role
+migration 0006 grants INSERT on raw_events / outcome_events.
 
 Validates request shape only; never maps or scores inline (that is the
 worker's job, once it picks up an unprocessed raw_events row). Every
@@ -8,6 +10,7 @@ path).
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Literal
@@ -17,20 +20,35 @@ from fastapi import APIRouter, Depends, Query
 from persistence.repositories import events as events_repo
 from persistence.repositories import measurement as measurement_repo
 from persistence.repositories import recommendations as recommendations_repo
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from api import errors
 from api.auth import require_tenant_api_key
-from api.deps import db_for_tenant
+from api.deps import db_for_ingest
 from api.rate_limit import get_ingest_limiter
 from api.settings import get_settings
 
 router = APIRouter(prefix="/v1", tags=["ingestion"])
 
+log = logging.getLogger(__name__)
+
+
+def _first_error(exc: ValidationError) -> str:
+    first = exc.errors()[0]
+    location = ".".join(str(p) for p in first["loc"]) or "body"
+    return f"{location}: {first['msg']}"
+
 
 # ---------------------------------------------------------------------------
 # Events
 # ---------------------------------------------------------------------------
+
+
+def _rfc3339_or_raise(value: str, field: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field} is not a valid RFC 3339 timestamp") from exc
 
 
 class RawEventIn(BaseModel):
@@ -44,10 +62,7 @@ class RawEventIn(BaseModel):
     @field_validator("occurred_at")
     @classmethod
     def _rfc3339(cls, v: str) -> str:
-        try:
-            datetime.fromisoformat(v)
-        except ValueError as exc:
-            raise ValueError("occurred_at is not a valid RFC 3339 timestamp") from exc
+        _rfc3339_or_raise(v, "occurred_at")
         return v
 
 
@@ -65,7 +80,7 @@ def post_event(
     settings = get_settings()
     get_ingest_limiter(settings.ingest_rate_limit_per_min).check(tenant_id)
 
-    with db_for_tenant(tenant_id) as session:
+    with db_for_ingest(tenant_id) as session:
         raw_event_id, duplicate = events_repo.insert_raw_event(
             session,
             tenant_id=tenant_id,
@@ -76,7 +91,9 @@ def post_event(
 
 
 class BatchIn(BaseModel):
-    events: list[RawEventIn]
+    # Raw dicts, validated one by one below: a single malformed event must not
+    # reject the whole batch, which is what `list[RawEventIn]` would do here.
+    events: list[dict]
 
 
 class RejectedEvent(BaseModel):
@@ -109,28 +126,34 @@ def post_events_batch(
     duplicates = 0
     rejected: list[RejectedEvent] = []
 
-    with db_for_tenant(tenant_id) as session:
-        for i, event in enumerate(body.events):
+    with db_for_ingest(tenant_id) as session:
+        for i, raw in enumerate(body.events):
+            client_event_id = raw.get("client_event_id") if isinstance(raw, dict) else None
             try:
-                _raw_id, is_dup = events_repo.insert_raw_event(
-                    session,
-                    tenant_id=tenant_id,
-                    client_event_id=event.client_event_id,
-                    payload=event.model_dump(mode="json"),
-                )
-                if is_dup:
-                    duplicates += 1
-                else:
-                    accepted += 1
-            except Exception as exc:  # noqa: BLE001 -- partial acceptance, one bad row must not sink the batch
-                rejected.append(
-                    RejectedEvent(
-                        index=i,
+                event = RawEventIn.model_validate(raw)
+            except ValidationError as exc:
+                rejected.append(RejectedEvent(index=i, client_event_id=client_event_id,
+                                              code="VALIDATION_FAILED", message=_first_error(exc)))
+                continue
+            try:
+                # A savepoint per row: without it the first failed INSERT aborts
+                # the transaction and every later row fails with it.
+                with session.begin_nested():
+                    _raw_id, is_dup = events_repo.insert_raw_event(
+                        session,
+                        tenant_id=tenant_id,
                         client_event_id=event.client_event_id,
-                        code="VALIDATION_FAILED",
-                        message=str(exc),
+                        payload=event.model_dump(mode="json"),
                     )
-                )
+            except Exception:
+                log.exception("batch event %s could not be stored", i)
+                rejected.append(RejectedEvent(index=i, client_event_id=event.client_event_id,
+                                              code="INTERNAL", message="event could not be stored"))
+                continue
+            if is_dup:
+                duplicates += 1
+            else:
+                accepted += 1
 
     return BatchAccepted(accepted_count=accepted, duplicate_count=duplicates, rejected=rejected)
 
@@ -148,6 +171,12 @@ class OutcomeIn(BaseModel):
     observed_at: str
     value_idr: int | None = None
 
+    @field_validator("observed_at")
+    @classmethod
+    def _rfc3339(cls, v: str) -> str:
+        _rfc3339_or_raise(v, "observed_at")
+        return v
+
 
 @router.post("/outcomes", status_code=202)
 def post_outcome(body: OutcomeIn, tenant_id: str = Depends(require_tenant_api_key)) -> dict:
@@ -159,11 +188,11 @@ def post_outcome(body: OutcomeIn, tenant_id: str = Depends(require_tenant_api_ke
     except ValueError as exc:
         raise errors.validation_failed("experiment_id is not a valid id") from exc
 
-    observed_at = datetime.fromisoformat(body.observed_at)
+    observed_at = _rfc3339_or_raise(body.observed_at, "observed_at")
     if observed_at.tzinfo is None:
         observed_at = observed_at.replace(tzinfo=UTC)
 
-    with db_for_tenant(tenant_id) as session:
+    with db_for_ingest(tenant_id) as session:
         experiment = measurement_repo.get_experiment(session, tenant_id=tenant_id, experiment_id=experiment_uuid)
         if experiment is None:
             raise errors.not_found(f"experiment {body.experiment_id} not found")
@@ -207,7 +236,7 @@ class RecommendationList(BaseModel):
 @router.get("/recommendations")
 def list_approved_recommendations(
     status: str = Query(...),
-    limit: int = Query(default=50, le=500),
+    limit: int = Query(default=50, ge=1, le=500),
     cursor: int = Query(default=0),
     tenant_id: str = Depends(require_tenant_api_key),
 ) -> RecommendationList:
@@ -216,7 +245,7 @@ def list_approved_recommendations(
         # approval, and never sees an unapproved runner-up.
         raise errors.forbidden("status must be APPROVED; no other value is ever returned on this surface")
 
-    with db_for_tenant(tenant_id) as session:
+    with db_for_ingest(tenant_id) as session:
         rows = recommendations_repo.list_approved(session, tenant_id=tenant_id, limit=limit, offset=cursor)
 
     items = [
@@ -254,7 +283,7 @@ def delivery_ack(
     except ValueError as exc:
         raise errors.not_found("recommendation not found") from exc
 
-    with db_for_tenant(tenant_id) as session:
+    with db_for_ingest(tenant_id) as session:
         try:
             row = recommendations_repo.mark_delivered(
                 session, tenant_id=tenant_id, recommendation_id=rec_uuid, delivery_ref=body.delivery_ref

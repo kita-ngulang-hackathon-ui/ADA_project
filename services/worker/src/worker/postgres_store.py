@@ -18,10 +18,6 @@ depend on state produced by an earlier call in the same run:
   `save_allocation` -> PERSIST's `create_recommendations`, which needs the
   real `allocation_runs.id` (recommendations.allocation_run_id is NOT NULL)
   and, best-effort, the matching `allocation_candidates.id`.
-- `_rank_context_rows`, `_rank_strategy_db`: cached off the RANK stage's
-  `record_stage` detail, since `save_allocation`'s inputs (AllocationResult,
-  AllocationDecision) carry neither a ranking strategy nor a context size,
-  and `allocation_runs.ranking_strategy` / `.context_row_count` are NOT NULL.
 
 Known, deliberate simplifications (see also migration 0008's docstring and
 services/worker/store.py's `save_allocation` docstring for the two other
@@ -33,15 +29,15 @@ Protocol/schema gaps this file works around):
   gap. Closing that fully needs one transaction spanning both calls, which
   the Protocol's per-call method shape does not offer.
 - `record_stage` only persists stage -> status (`pipeline_runs.stages` has no
-  slot for the detail dict); the RANK stage's detail is cached in memory
-  (above) only for the one field `save_allocation` needs, not persisted.
+  slot for the detail dict).
 - `load_outcomes` reconstructs `run_id`/`arm`/`treated`/`spend_idr` fields
   that `outcome_events` does not store as columns: `arm` via a join to
   `experiment_assignments`; `run_id` via the user's latest `feature_snapshots`
   row (outcomes without one are already dropped downstream by
   `feedback.to_labeled_examples`, so an unresolved run_id is harmless);
   `treated` as `arm != CONTROL`; `spend_idr` from the generic `value_idr`
-  column. `outcome_type='RESPONDED'` is treated as `retained=True`.
+  column. Only `outcome_type='RETAINED'` counts as retention -- RESPONDED is
+  engagement, and the console's measurement endpoint counts it the same way.
 """
 from __future__ import annotations
 
@@ -65,6 +61,7 @@ from core_contracts import (
     LabeledExample,
     OutcomeEvent,
     PolicyDecision,
+    RankingStrategy,
     Recommendation,
     RiskScore,
 )
@@ -109,8 +106,6 @@ class PostgresPipelineStore:
         self._circle_id_by_str: dict[str, uuid.UUID] = {}
         self._allocation_run_id: uuid.UUID | None = None
         self._alloc_candidate_row_id_by_candidate_id: dict[str, uuid.UUID] = {}
-        self._rank_context_rows: int = 0
-        self._rank_strategy_db: str = "FALLBACK"
 
     def _session(self):
         return tenant_session(self._engine, self._tenant_id)
@@ -283,11 +278,6 @@ class PostgresPipelineStore:
                 session, tenant_id=record.tenant_id, run_id=uuid.UUID(record.run_id),
                 stage=record.stage, status=record.status,
             )
-        if record.stage == "RANK" and record.status == "DONE":
-            self._rank_context_rows = int(record.detail.get("context_rows") or 0)
-            strategy = record.detail.get("ranking_strategy")
-            if strategy:
-                self._rank_strategy_db = _RANKING_STRATEGY_FOR_DB.get(strategy, "FALLBACK")
 
     def save_circles(self, tenant_id: str, run_id: str, snapshots: list[CircleSnapshot], circles: list[Circle]) -> None:
         self._snapshot_by_user.update({s.user_pseudonym: s for s in snapshots})
@@ -368,13 +358,13 @@ class PostgresPipelineStore:
         with self._session() as session:
             policy_repo.write_decisions(session, tenant_id=tenant_id, rows=rows)
 
-    def get_or_create_experiment(self, tenant_id: str) -> str:
+    def get_or_create_experiment(self, tenant_id: str, *, control_pct: int, naive_pct: int) -> str:
         with self._session() as session:
             existing = measurement.get_active_experiment(session, tenant_id=tenant_id)
             if existing is not None:
                 return str(existing.id)
             created = measurement.create_experiment(
-                session, tenant_id=tenant_id, name="default", control_pct=20, naive_pct=20
+                session, tenant_id=tenant_id, name="default", control_pct=control_pct, naive_pct=naive_pct
             )
             return str(created.id)
 
@@ -391,14 +381,16 @@ class PostgresPipelineStore:
     def save_allocation(
         self, tenant_id: str, run_id: str, result: AllocationResult,
         extra_decisions: list[AllocationDecision], candidates: list[Candidate],
+        ranking_strategy: RankingStrategy | None, context_row_count: int,
     ) -> None:
         candidates_by_id = {c.candidate_id: c for c in candidates}
         decisions_all = list(result.decisions) + list(extra_decisions)
+        strategy_db = _RANKING_STRATEGY_FOR_DB[ranking_strategy.value] if ranking_strategy else "FALLBACK"
 
         with self._session() as session:
             run_row = allocations.create_run(
                 session, tenant_id=tenant_id, budget_idr=result.budget_idr, strategy=result.strategy,
-                ranking_strategy=self._rank_strategy_db, context_row_count=self._rank_context_rows,
+                ranking_strategy=strategy_db, context_row_count=context_row_count,
                 objective_value_idr=round(result.objective_value_idr),
                 candidate_count=len(candidates), selected_count=len(result.selected),
                 pipeline_run_id=uuid.UUID(run_id),
@@ -407,19 +399,17 @@ class PostgresPipelineStore:
 
             candidate_dicts = []
             for d in decisions_all:
-                c = candidates_by_id.get(d.candidate_id)
-                group_id = c.group_id if c else (
-                    d.choice_key.removeprefix("group:") if d.choice_key.startswith("group:") else None
-                )
+                # Every decision -- allocator or pipeline-side exclusion -- names a real candidate.
+                c = candidates_by_id[d.candidate_id]
                 candidate_dicts.append({
-                    "subject_type": "GROUP" if group_id else "USER",
-                    "user_pseudonym": c.user_pseudonym if c else (None if group_id else d.choice_key),
-                    "circle_id": self._circle_id_by_str.get(group_id) if group_id else None,
-                    "incentive_code": c.incentive_code if c else "UNKNOWN",
-                    "churn_risk": c.churn_risk if c else None,
-                    "impact_score": c.impact_score if c else None,
-                    "segment": c.segment.value if c else None,
-                    "pattern_type": c.pattern_type.value if c else None,
+                    "subject_type": "GROUP" if c.group_id else "USER",
+                    "user_pseudonym": c.user_pseudonym,
+                    "circle_id": self._circle_id_by_str.get(c.group_id) if c.group_id else None,
+                    "incentive_code": c.incentive_code,
+                    "churn_risk": c.churn_risk,
+                    "impact_score": c.impact_score,
+                    "segment": c.segment.value,
+                    "pattern_type": c.pattern_type.value,
                     "priority_idr": round(d.priority),
                     "cost_idr": d.cost_idr,
                     "user_rank": d.rank,
@@ -532,7 +522,7 @@ class PostgresPipelineStore:
                     user_pseudonym=row.user_pseudonym,
                     arm=arm,
                     treated=arm != Arm.CONTROL,
-                    retained=row.outcome_type in ("RETAINED", "RESPONDED"),
+                    retained=row.outcome_type == "RETAINED",
                     spend_idr=row.value_idr or 0,
                     observed_at=row.observed_at,
                 ))

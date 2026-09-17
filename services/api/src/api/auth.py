@@ -18,16 +18,27 @@ import base64
 import hashlib
 import hmac
 import json
+import time
+from functools import lru_cache
 
 from fastapi import Cookie, Depends, Header
 from persistence.repositories import tenants as tenants_repo
 from persistence.session import make_engine
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from api import errors
+from api.rate_limit import get_console_limiter
 from api.settings import Settings, get_settings
 
 SESSION_COOKIE_NAME = "console_session"
+
+
+@lru_cache
+def _unscoped_engine(database_url: str) -> Engine:
+    # One small pool per URL for the process lifetime; building an engine per
+    # request leaked a connection pool on every auth lookup.
+    return make_engine(database_url, pool_size=1, max_overflow=0)
 
 
 def unscoped_session(settings: Settings) -> Session:
@@ -35,8 +46,7 @@ def unscoped_session(settings: Settings) -> Session:
     must happen BEFORE a tenant is known: API key resolution and console
     session issuance. RLS still applies; queries here only ever touch
     `tenants` / `api_keys`, which are RLS-exempt for exactly this reason."""
-    engine = make_engine(settings.database_url, pool_size=1, max_overflow=0)
-    return Session(bind=engine)
+    return Session(bind=_unscoped_engine(settings.database_url))
 
 
 def hash_api_key(raw_key: str, pepper: str) -> str:
@@ -90,8 +100,15 @@ def _verify(token: str, secret: str) -> dict | None:
 
 
 def issue_session_cookie(*, tenant_id: str, tenant_slug: str, reviewer_id: str, settings: Settings) -> str:
+    """The cookie carries its own expiry: a signed cookie that never expires
+    stays valid for as long as CONSOLE_SESSION_SECRET does."""
     return _sign(
-        {"tenant_id": tenant_id, "tenant_slug": tenant_slug, "reviewer_id": reviewer_id},
+        {
+            "tenant_id": tenant_id,
+            "tenant_slug": tenant_slug,
+            "reviewer_id": reviewer_id,
+            "exp": int(time.time()) + settings.console_session_ttl_seconds,
+        },
         settings.console_session_secret,
     )
 
@@ -117,9 +134,15 @@ def require_console_reviewer(
     payload = _verify(console_session, settings.console_session_secret)
     if payload is None:
         raise errors.unauthenticated("Invalid or tampered console session")
+    expires_at = payload.get("exp")
+    if not isinstance(expires_at, int) or expires_at <= int(time.time()):
+        raise errors.unauthenticated("Console session expired; sign in again")
     reviewer_id = payload.get("reviewer_id")
     if not reviewer_id or reviewer_id not in settings.demo_reviewer_set:
         raise errors.forbidden("reviewer_id is not on the approved reviewer list")
+    get_console_limiter(settings.console_rate_limit_per_min).check(
+        f"{payload['tenant_id']}:{reviewer_id}"
+    )
     return ConsoleSession(
         tenant_id=payload["tenant_id"], tenant_slug=payload["tenant_slug"], reviewer_id=reviewer_id
     )

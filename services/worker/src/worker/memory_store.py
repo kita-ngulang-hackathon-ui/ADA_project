@@ -144,7 +144,7 @@ class InMemoryStore:
     def save_policy_decisions(self, tenant_id, run_id, decisions) -> None:
         self.policy_decisions[tenant_id].extend(decisions)
 
-    def get_or_create_experiment(self, tenant_id: str) -> str:
+    def get_or_create_experiment(self, tenant_id: str, *, control_pct: int, naive_pct: int) -> str:
         return self.experiments.setdefault(tenant_id, f"exp-{tenant_id}-1")
 
     def save_arm_assignments(self, tenant_id, experiment_id, arms) -> None:
@@ -153,11 +153,11 @@ class InMemoryStore:
             if existing != arm:
                 raise ValueError("arm assignment changed within an experiment")
 
-    def save_allocation(self, tenant_id, run_id, result, extra_decisions, candidates) -> None:
-        # `candidates` is only needed by the Postgres store's richer
-        # allocation_candidates audit table; the in-memory store has no
-        # equivalent table, so it is accepted for Protocol compliance and
-        # not retained.
+    def save_allocation(self, tenant_id, run_id, result, extra_decisions, candidates,
+                        ranking_strategy, context_row_count) -> None:
+        # `candidates`, `ranking_strategy` and `context_row_count` only feed the
+        # Postgres store's allocation_runs / allocation_candidates tables; the
+        # in-memory store has no equivalent, so they are not retained.
         self.allocations[tenant_id].append((result, list(extra_decisions)))
 
     def save_narration(self, tenant_id, run_id, fact_sheet_hash, text, source) -> None:

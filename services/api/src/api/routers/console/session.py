@@ -57,6 +57,7 @@ def create_session(
         value=cookie,
         httponly=True,
         samesite="lax",
+        max_age=settings.console_session_ttl_seconds,
         secure=settings.app_env != "local",
     )
     return SessionOut(tenant_id=str(tenant.id), tenant_slug=tenant.slug, reviewer_id=body.reviewer_id)
