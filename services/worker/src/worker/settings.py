@@ -17,8 +17,13 @@ class WorkerSettings(BaseSettings):
     pseudonym_hmac_secret: str
     measurement_hmac_secret: str
 
-    # Worker
+    # Worker. docker-compose passes WORKER_DATABASE_URL (app_worker role) in as
+    # DATABASE_URL, so the service always connects with worker rights.
+    database_url: str = ""
     worker_batch_size: int = 500
+    worker_poll_interval_seconds: float = 2
+    worker_max_retries: int = 3
+    worker_stale_claim_seconds: int = 120
 
     # External signals (requirement 2)
     external_signal_source: str = "canned"  # canned | live (open decision)
