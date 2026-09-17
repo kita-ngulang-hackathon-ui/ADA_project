@@ -11,6 +11,46 @@ from sqlalchemy.orm import Session
 from persistence.models import CanonicalEventRow, RawEvent
 
 
+def get_raw_event_id_by_client_id(
+    session: Session, *, tenant_id: str, client_event_id: str
+) -> uuid.UUID | None:
+    """Resolves a just-normalized CanonicalEvent back to its source raw_events
+    row. core_contracts.CanonicalEvent carries no raw_event_id of its own
+    (it is an L0 type with no persistence concerns), so callers writing
+    canonical_events rows (which do require it, NOT NULL) look it up by the
+    idempotency key the two tables share."""
+    return session.execute(
+        select(RawEvent.id).where(
+            RawEvent.tenant_id == tenant_id, RawEvent.client_event_id == client_event_id
+        )
+    ).scalar_one_or_none()
+
+
+def load_since(session: Session, *, tenant_id: str, since: datetime) -> list[dict]:
+    """Joins back to raw_events for client_event_id -- CanonicalEventRow
+    itself only stores the raw_event_id FK, but core_contracts.CanonicalEvent
+    (an L0 type with no persistence concerns) requires client_event_id."""
+    stmt = (
+        select(CanonicalEventRow, RawEvent.client_event_id)
+        .join(RawEvent, RawEvent.id == CanonicalEventRow.raw_event_id)
+        .where(CanonicalEventRow.tenant_id == tenant_id, CanonicalEventRow.occurred_at >= since)
+        .order_by(CanonicalEventRow.occurred_at)
+    )
+    return [
+        {
+            "tenant_id": str(row.tenant_id),
+            "client_event_id": client_event_id,
+            "event_type": row.canonical_type,
+            "occurred_at": row.occurred_at,
+            "user_pseudonym": row.user_pseudonym,
+            "amount_idr": row.amount_idr,
+            "counterparty_pseudonym": row.counterparty_pseudonym,
+            "attributes": row.attributes,
+        }
+        for row, client_event_id in session.execute(stmt).all()
+    ]
+
+
 def insert_raw_event(
     session: Session, *, tenant_id: str, client_event_id: str, payload: dict
 ) -> tuple[uuid.UUID, bool]:

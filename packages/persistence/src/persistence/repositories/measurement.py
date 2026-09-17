@@ -28,6 +28,19 @@ def get_experiment(session: Session, *, tenant_id: str, experiment_id: uuid.UUID
     ).scalar_one_or_none()
 
 
+def get_active_experiment(session: Session, *, tenant_id: str) -> Experiment | None:
+    """The one experiment a pipeline run assigns arms against. "Active" means
+    not yet ended; the most recently started one wins if somehow more than
+    one is open (there is no separate scheduler that would create that)."""
+    stmt = (
+        select(Experiment)
+        .where(Experiment.tenant_id == tenant_id, Experiment.ended_at.is_(None))
+        .order_by(Experiment.started_at.desc())
+        .limit(1)
+    )
+    return session.execute(stmt).scalar_one_or_none()
+
+
 def record_assignment(
     session: Session, *, tenant_id: str, experiment_id: uuid.UUID, user_pseudonym: str, arm: str
 ) -> None:
