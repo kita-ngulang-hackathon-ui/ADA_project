@@ -1,4 +1,8 @@
 """ingest-mapping (L1) — Per-client event vocabulary to canonical events, plus pseudonymization.
 
-Re-export the public API of this package here once implemented.
+`pseudonymize` is deliberately not re-exported: other packages must not reach it.
 """
+from ingest_mapping.mapping_config import EventTypeMapping, TenantMappingConfig
+from ingest_mapping.normalize import normalize
+
+__all__ = ["EventTypeMapping", "TenantMappingConfig", "normalize"]

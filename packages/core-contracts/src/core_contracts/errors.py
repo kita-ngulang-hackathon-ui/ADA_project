@@ -1,7 +1,4 @@
-"""Domain exceptions shared across packages.
-
-TODO: add fields (e.g. offending status, rule code) as needed.
-"""
+"""Domain exceptions shared across packages."""
 
 
 class DomainError(Exception):
@@ -20,5 +17,13 @@ class ContextTooSmall(DomainError):
     """Not enough in-context rows for a TabPFN call; caller must fall back."""
 
 
+class CrossTenantContext(DomainError):
+    """In-context rows from more than one tenant (no cross-client sharing, §4)."""
+
+
 class PolicyViolation(DomainError):
     """A hard policy rule was broken."""
+
+
+class NarrationRejected(DomainError, ValueError):
+    """An LLM narration contains information that is not in the fact sheet."""

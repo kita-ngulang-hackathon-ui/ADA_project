@@ -6,8 +6,12 @@ requires-python = ">=3.11"
 dependencies = [
     "core-contracts",
     "numpy",
-    "tabpfn",
+    "scikit-learn",
 ]
+
+[project.optional-dependencies]
+# TabPFN weights are being trained separately; without this extra the sklearn stand-in is used.
+tabpfn = ["tabpfn"]
 
 [build-system]
 requires = ["hatchling"]

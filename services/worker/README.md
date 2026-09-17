@@ -29,6 +29,8 @@ reading/writing the DB, fetching the external feed, calling the LLM.
 | `src/worker/pipeline.py` | `run_pipeline(tenant_id, run_id)`. Calls the stages above in order, records per-stage status on the run row, passes config values explicitly into L1 functions. |
 | `src/worker/feed_adapter.py` | `load_feed()`: `EXTERNAL_SIGNAL_SOURCE=canned` reads `fixtures/external/*.json`; `live` fetches from `EXTERNAL_SIGNAL_LIVE_BASE_URL` with a short timeout and falls back to the last snapshot, then to canned. Never blocks the pipeline. |
 | `src/worker/llm_narrator.py` | Implements `explain.narrator_protocol.Narrator` with `httpx`. Provider/model from `EXPLAIN_LLM_*` (open decision). Timeout `EXPLAIN_LLM_TIMEOUT_S`, temperature 0. Cache by `fact_sheet_hash`. Any failure or validator rejection falls back to `explain.template`. `EXPLAIN_LLM_ENABLED=false` means template only (offline demo). |
+| `src/worker/store.py` | `PipelineStore` Protocol: everything the pipeline reads and writes. No approve/reject/deliver method exists. |
+| `src/worker/memory_store.py` | `InMemoryStore` implementing the Protocol, tenant-isolated. Used by tests and the offline CLI until the Postgres store lands. |
 | `src/worker/outcomes.py` | Turn outcome events into labeled examples via `feedback`, persist them, update the counter. |
 
 ## Tests to write

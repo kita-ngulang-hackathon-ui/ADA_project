@@ -1,8 +1,20 @@
 """Raw feed item shape (canned fixture or live adapter output).
 
-TODO: FeedItem pydantic model; headline is display-only, never scored.
+headline is display-only and never scored.
 """
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
 
 
-class FeedItem:
-    """TODO."""
+class FeedItem(BaseModel):
+    # extra="ignore": live sources may send more fields; none of them reach scoring.
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    source: str
+    scope_type: str
+    scope_key: str
+    signal_type: str
+    value: float
+    observed_at: datetime
+    headline: str | None = None
