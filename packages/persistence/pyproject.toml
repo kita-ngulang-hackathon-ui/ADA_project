@@ -1,0 +1,21 @@
+[project]
+name = "persistence"
+version = "0.0.0"
+description = "SQLAlchemy models, tenant-scoped sessions, and repositories."
+requires-python = ">=3.11"
+dependencies = [
+    "core-contracts",
+    "sqlalchemy>=2",
+    "psycopg[binary]>=3",
+    "alembic",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/persistence"]
+
+[tool.uv.sources]
+core-contracts = { workspace = true }

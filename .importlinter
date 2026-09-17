@@ -1,0 +1,127 @@
+# Layer and independence contracts (ARCHITECTURE §5). `make lint-imports` enforces them.
+# TODO: verify module names once packages exist; keep contracts in sync with README files.
+
+[importlinter]
+root_packages =
+    core_contracts
+    ingest_mapping
+    external_signals
+    graph_signal
+    churn_risk
+    impact
+    policy_guard
+    ranker
+    allocator
+    explain
+    measurement
+    feedback
+    persistence
+    api
+    worker
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = L0 < L1 < L2 < L3 layering
+type = layers
+layers =
+    api | worker
+    persistence
+    ingest_mapping | external_signals | graph_signal | churn_risk | impact | policy_guard | ranker | allocator | explain | measurement | feedback
+    core_contracts
+
+[importlinter:contract:l1-independence]
+name = L1 packages are mutually independent
+type = independence
+modules =
+    ingest_mapping
+    external_signals
+    graph_signal
+    churn_risk
+    impact
+    policy_guard
+    ranker
+    allocator
+    explain
+    measurement
+    feedback
+
+[importlinter:contract:l1-purity]
+name = L1 packages perform no I/O
+type = forbidden
+source_modules =
+    ingest_mapping
+    external_signals
+    graph_signal
+    churn_risk
+    impact
+    policy_guard
+    ranker
+    allocator
+    explain
+    measurement
+    feedback
+forbidden_modules =
+    sqlalchemy
+    alembic
+    psycopg
+    fastapi
+    httpx
+    requests
+    urllib3
+    socket
+    openai
+    anthropic
+
+[importlinter:contract:core-purity]
+name = core_contracts depends on nothing in the workspace
+type = forbidden
+source_modules =
+    core_contracts
+forbidden_modules =
+    ingest_mapping
+    external_signals
+    graph_signal
+    churn_risk
+    impact
+    policy_guard
+    ranker
+    allocator
+    explain
+    measurement
+    feedback
+    persistence
+    api
+    worker
+
+[importlinter:contract:pseudonymization-boundary]
+name = Only ingest_mapping may use the pseudonymization module
+type = forbidden
+source_modules =
+    external_signals
+    graph_signal
+    churn_risk
+    impact
+    policy_guard
+    ranker
+    allocator
+    explain
+    measurement
+    feedback
+    persistence
+    api
+forbidden_modules =
+    ingest_mapping.pseudonymize
+
+[importlinter:contract:api-no-scoring]
+name = API does not run the pipeline or the LLM
+type = forbidden
+source_modules =
+    api
+forbidden_modules =
+    worker
+    churn_risk
+    impact
+    ranker
+    allocator
+    openai
+    anthropic

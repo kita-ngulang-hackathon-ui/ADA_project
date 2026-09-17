@@ -1,0 +1,6 @@
+{
+  "_comment": "TODO: map demo-paylater client event types to canonical types (e.g. paylater.installment.overdue -> LOAN_REPAYMENT_LATE).",
+  "tenant_slug": "demo-paylater",
+  "profile_type": "LENDING",
+  "mappings": []
+}

@@ -1,0 +1,4 @@
+{
+  "_comment": "OPEN DECISION (REQUIREMENTS section 6): exact incentive catalog. Fields: code, display_name, cost_idr, encourages_borrowing, is_group.",
+  "incentives": []
+}

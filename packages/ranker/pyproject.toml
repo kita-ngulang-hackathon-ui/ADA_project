@@ -1,0 +1,20 @@
+[project]
+name = "ranker"
+version = "0.0.0"
+description = "Decision Engine stage 2: TabPFN in-context priority scoring."
+requires-python = ">=3.11"
+dependencies = [
+    "core-contracts",
+    "numpy",
+    "tabpfn",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ranker"]
+
+[tool.uv.sources]
+core-contracts = { workspace = true }

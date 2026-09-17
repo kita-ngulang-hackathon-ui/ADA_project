@@ -1,0 +1,6 @@
+{
+  "_comment": "TODO: map demo-wallet client event types to canonical types (e.g. wallet.transfer.sent -> P2P_TRANSFER).",
+  "tenant_slug": "demo-wallet",
+  "profile_type": "WALLET",
+  "mappings": []
+}

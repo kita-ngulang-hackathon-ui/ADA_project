@@ -1,0 +1,4 @@
+{
+  "_comment": "TODO: fill with canned signals. scope_type in CLIENT|REGION|COHORT; signal_type in NEWS_SENTIMENT|SOCIAL_SENTIMENT|SECTOR_TREND; value in [-1,1]. No user fields.",
+  "items": []
+}

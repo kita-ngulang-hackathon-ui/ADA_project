@@ -1,0 +1,12 @@
+-- Reference SQL for DB roles, grants, and the approval guard (requirement 8).
+-- Apply through an Alembic migration; this file documents the intent.
+--
+-- TODO:
+-- 1. CREATE ROLE app_worker, app_console, app_readonly (LOGIN, passwords from env).
+-- 2. GRANT INSERT on recommendations to app_worker; UPDATE(status, reviewed_by,
+--    reviewed_at, review_note) only to app_console.
+-- 3. CHECK (status <> 'APPROVED'  OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL))
+--    CHECK (status <> 'DELIVERED' OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL))
+-- 4. BEFORE UPDATE trigger rejecting transitions not in the state machine.
+-- 5. ENABLE ROW LEVEL SECURITY + policy USING (tenant_id = current_setting('app.tenant_id')::uuid)
+--    on every domain table.

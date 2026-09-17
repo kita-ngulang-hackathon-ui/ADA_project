@@ -1,0 +1,18 @@
+[project]
+name = "feedback"
+version = "0.0.0"
+description = "Measured outcomes to new labeled in-context examples."
+requires-python = ">=3.11"
+dependencies = [
+    "core-contracts",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/feedback"]
+
+[tool.uv.sources]
+core-contracts = { workspace = true }
