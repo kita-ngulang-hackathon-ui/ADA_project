@@ -12,6 +12,10 @@ import hmac
 
 from core_contracts import Arm
 
+CONTROL = Arm.CONTROL
+NAIVE = Arm.NAIVE
+ENGINE = Arm.ENGINE
+
 
 def bucket(tenant_id: str, experiment_id: str, user_pseudonym: str, *, secret: bytes) -> int:
     if not secret:

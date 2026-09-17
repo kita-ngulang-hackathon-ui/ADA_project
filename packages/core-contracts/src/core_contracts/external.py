@@ -8,6 +8,8 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core_contracts.ids import new_id
+
 
 class ScopeType(str, Enum):
     CLIENT = "CLIENT"
@@ -26,7 +28,7 @@ class ExternalSignal(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    signal_id: str
+    signal_id: str = Field(default_factory=new_id)
     source: str
     scope_type: ScopeType
     scope_key: str

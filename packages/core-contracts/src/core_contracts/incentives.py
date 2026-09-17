@@ -17,3 +17,4 @@ class Incentive(BaseModel):
     is_group: bool = False
     # Empty means applicable to every profile type.
     applicable_profile_types: tuple[str, ...] = ()
+    active: bool = True

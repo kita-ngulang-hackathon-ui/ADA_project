@@ -20,9 +20,16 @@ from core_contracts.errors import (
     NarrationRejected,
     PolicyViolation,
 )
-from core_contracts.events import COUNTERPARTY_EVENT_TYPES, CanonicalEvent, CanonicalEventType
+from core_contracts.events import (
+    ALLOWED_ATTRIBUTE_KEYS,
+    COUNTERPARTY_BEARING_EVENT_TYPES,
+    COUNTERPARTY_EVENT_TYPES,
+    CanonicalEvent,
+    CanonicalEventType,
+)
 from core_contracts.external import ExternalSignal, ScopeType, SignalType
 from core_contracts.graph import Circle, CircleSnapshot, Edge, PatternType
+from core_contracts.ids import new_id
 from core_contracts.incentives import Incentive
 from core_contracts.measurement import Arm, FeatureSnapshot, LabeledExample, OutcomeEvent
 from core_contracts.recommendation import (
@@ -35,7 +42,9 @@ from core_contracts.recommendation import (
 from core_contracts.scores import ImpactScore, ImpactSegment, ReasonFactor, RiskScore
 
 __all__ = [
+    "ALLOWED_ATTRIBUTE_KEYS",
     "ALLOWED_TRANSITIONS",
+    "COUNTERPARTY_BEARING_EVENT_TYPES",
     "COUNTERPARTY_EVENT_TYPES",
     "AllocationDecision",
     "AllocationResult",
@@ -76,4 +85,5 @@ __all__ = [
     "SignalType",
     "UserFacts",
     "assert_transition",
+    "new_id",
 ]
