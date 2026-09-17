@@ -17,6 +17,7 @@ from pathlib import Path
 
 from core_contracts import Incentive
 
+from worker.churn_scorer import ChurnScorerUnavailable, load_scorer
 from worker.llm_narrator import narrator_from_settings
 from worker.memory_store import InMemoryStore
 from worker.pipeline import run_pipeline
@@ -52,10 +53,18 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     settings = WorkerSettings()
+    # Load the trained scorer once per process, before any run; it stays resident in memory.
+    churn_scorer = None
+    if settings.churn_scorer_enabled:
+        try:
+            churn_scorer = load_scorer(settings)
+        except ChurnScorerUnavailable as exc:
+            raise SystemExit(f"worker startup failed: {exc}") from exc
     store, tenant_id = seed_store(args.fixtures, args.tenant_slug, args.events)
     now = datetime.fromisoformat(args.now) if args.now else None
     result = run_pipeline(tenant_id, f"run-{uuid.uuid4().hex[:12]}", store=store, settings=settings,
-                          now=now, narrator=narrator_from_settings(settings))
+                          now=now, narrator=narrator_from_settings(settings),
+                          churn_scorer=churn_scorer)
     json.dump(asdict(result), sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")
     if result.status != "DONE":

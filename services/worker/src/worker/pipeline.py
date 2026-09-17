@@ -21,6 +21,7 @@ import churn_risk
 import external_signals
 import graph_signal
 import impact
+import pandas as pd
 import ranker
 from core_contracts import (
     AllocationDecision,
@@ -50,6 +51,7 @@ from policy_guard import PolicyConfig, evaluate
 from pydantic import ValidationError
 
 from worker import feed_adapter
+from worker.churn_scorer import ChurnScorerUnavailable, load_mapping
 from worker.llm_narrator import narrate_or_fallback
 from worker.store import PipelineStore, StageRecord
 
@@ -105,6 +107,7 @@ class _Run:
     circles: list = field(default_factory=list)
     features: dict = field(default_factory=dict)
     risk: dict[str, RiskScore] = field(default_factory=dict)
+    scorer_features: dict[str, dict] = field(default_factory=dict)
     impact: dict[str, ImpactScore] = field(default_factory=dict)
     segments: dict = field(default_factory=dict)
     business_value: dict[str, int] = field(default_factory=dict)
@@ -216,7 +219,43 @@ def _heuristic_risk(f: dict) -> float:
     return round(0.5 * recency + 0.3 * dip + 0.2 * quiet, 4)
 
 
-def _risk(run: _Run, store: PipelineStore, settings, **_) -> dict:
+def _risk_trained(run: _Run, store: PipelineStore, settings, scorer) -> dict:
+    """Score with the resident trained TabPFN scorer loaded from the artifact bundle."""
+    if scorer is None:
+        raise ChurnScorerUnavailable("CHURN_SCORER_ENABLED=true but no trained scorer was loaded")
+    mapping = load_mapping(settings.churn_scorer_mapping_path)
+    for user in run.users:
+        run.scorer_features[user] = churn_risk.build_snapshot_features(
+            run.events_by_user[user], now=run.now, attributes=run.attributes.get(user),
+            external_signal=run.signal_of.get(user), profile_type=run.tenant.profile_type,
+            business_value_idr=run.business_value[user], mapping=mapping,
+        )
+    if not run.users:
+        return {"model": scorer.model_name, "device": scorer.device, "scored": 0}
+
+    as_of = run.now.date().isoformat()
+    candidates = pd.DataFrame(
+        [{"user_id": u, "snapshot_date": as_of, **run.scorer_features[u]} for u in run.users]
+    )
+    risk, neutral = scorer.predict_with_neutral(candidates, churn_risk.NEUTRAL_SIGNAL)
+    attributed = 0
+    for i, user in enumerate(run.users):
+        signal = run.signal_of.get(user)
+        contribution = float(risk[i] - neutral[i]) if signal is not None else 0.0
+        attributed += signal is not None
+        run.risk[user] = RiskScore(
+            user_pseudonym=user, churn_risk=float(risk[i]), model=scorer.model_name,
+            context_row_count=scorer.context_row_count,
+            external_signal_id=signal.signal_id if signal else None,
+            external_signal_contribution=contribution,
+        )
+    store.save_risk_scores(run.tenant_id, run.run_id, list(run.risk.values()))
+    return {"model": scorer.model_name, "device": scorer.device,
+            "context_rows": scorer.context_row_count, "scored": len(run.risk),
+            "users_with_signal_attribution": attributed}
+
+
+def _risk(run: _Run, store: PipelineStore, settings, churn_scorer=None, **_) -> dict:
     run.labeled = store.load_labeled_examples(run.tenant_id)
     for user in run.users:
         f = churn_risk.build_features(run.events_by_user[user], run.snapshots.get(user),
@@ -224,6 +263,9 @@ def _risk(run: _Run, store: PipelineStore, settings, **_) -> dict:
         run.features[user] = f
         # monetary_30d_idr is a 30-day window, so it stands in for one month of volume.
         run.business_value[user] = int(f["monetary_30d_idr"] * settings.pipeline_business_value_months)
+
+    if settings.churn_scorer_enabled:
+        return _risk_trained(run, store, settings, churn_scorer)
 
     try:
         context_X, context_y = churn_risk.select_context(
@@ -644,7 +686,8 @@ _STAGE_FUNCS = {
 
 def run_pipeline(tenant_id: str, run_id: str, *, store: PipelineStore, settings,
                  now: datetime | None = None, narrator=None,
-                 feed_loader: Callable = feed_adapter.load_feed) -> PipelineRunResult:
+                 feed_loader: Callable = feed_adapter.load_feed,
+                 churn_scorer=None) -> PipelineRunResult:
     run = _Run(tenant_id=tenant_id, run_id=run_id, now=now or datetime.now(UTC))
     run.tenant = store.get_tenant(tenant_id)
     outcomes = [StageOutcome(stage=s, status="PENDING") for s in STAGES]
@@ -656,7 +699,7 @@ def run_pipeline(tenant_id: str, run_id: str, *, store: PipelineStore, settings,
         store.record_stage(StageRecord(run_id, tenant_id, outcome.stage, "RUNNING"))
         try:
             detail = _STAGE_FUNCS[outcome.stage](run, store, settings, narrator=narrator,
-                                                 feed_loader=feed_loader)
+                                                 feed_loader=feed_loader, churn_scorer=churn_scorer)
         except Exception as exc:
             log.exception("stage %s failed for run %s", outcome.stage, run_id)
             outcome.status, outcome.detail = "FAILED", {"error": f"{type(exc).__name__}: {exc}"}

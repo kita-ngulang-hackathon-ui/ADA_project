@@ -13,7 +13,7 @@ from core_contracts import (
 from worker.memory_store import InMemoryStore
 from worker.pipeline import STAGES, run_pipeline
 from worker.store import PipelineStore
-from worker_world import NOW, PAYLATER_ID, WALLET_ID, build_store, make_settings
+from worker_world import NOW, PAYLATER_ID, WALLET_ID, build_store, fake_scorer, make_settings
 
 
 def _all_decisions(store, tenant_id):
@@ -22,7 +22,7 @@ def _all_decisions(store, tenant_id):
 
 
 def test_wallet_run_produces_pending_recommendations_only(store, settings) -> None:
-    result = run_pipeline(WALLET_ID, "run-1", store=store, settings=settings, now=NOW)
+    result = run_pipeline(WALLET_ID, "run-1", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer())
 
     assert result.status == "DONE", [(s.stage, s.detail) for s in result.stages]
     assert [s.stage for s in result.stages] == STAGES
@@ -38,7 +38,7 @@ def test_wallet_run_produces_pending_recommendations_only(store, settings) -> No
 
 
 def test_wallet_run_details(store, settings) -> None:
-    result = run_pipeline(WALLET_ID, "run-1", store=store, settings=settings, now=NOW)
+    result = run_pipeline(WALLET_ID, "run-1", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer())
     stages = {s.stage: s for s in result.stages}
 
     assert stages["INGEST"].detail["unmapped"] == 1
@@ -64,13 +64,13 @@ def test_wallet_run_details(store, settings) -> None:
 
 
 def test_budget_is_respected(store, settings) -> None:
-    run_pipeline(WALLET_ID, "run-1", store=store, settings=settings, now=NOW)
+    run_pipeline(WALLET_ID, "run-1", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer())
     result, _ = store.allocations[WALLET_ID][-1]
     assert result.spent_idr <= settings.default_budget_idr
 
 
 def test_paylater_skips_graph_and_denies_borrowing_to_stressed_user(store, settings) -> None:
-    result = run_pipeline(PAYLATER_ID, "run-p", store=store, settings=settings, now=NOW)
+    result = run_pipeline(PAYLATER_ID, "run-p", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer())
     stages = {s.stage: s for s in result.stages}
     assert result.status == "DONE"
     assert stages["GRAPH"].status == "SKIPPED"
@@ -90,7 +90,7 @@ def test_paylater_skips_graph_and_denies_borrowing_to_stressed_user(store, setti
 def test_unset_frequency_cap_fails_closed(store) -> None:
     settings = make_settings(frequency_cap_max_contacts="__TBD__", frequency_cap_window_days="__TBD__")
     assert settings.frequency_cap_max_contacts is None
-    result = run_pipeline(WALLET_ID, "run-cap", store=store, settings=settings, now=NOW)
+    result = run_pipeline(WALLET_ID, "run-cap", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer())
 
     assert result.status == "DONE"
     assert result.recommendation_ids == []
@@ -101,12 +101,12 @@ def test_unset_frequency_cap_fails_closed(store) -> None:
 
 
 def test_frequency_cap_denies_recently_contacted_user(store, settings) -> None:
-    run_pipeline(WALLET_ID, "run-a", store=store, settings=settings, now=NOW)
+    run_pipeline(WALLET_ID, "run-a", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer())
     target = next(iter(store.recommendations[WALLET_ID].values())).user_pseudonym
     store.recommendations.clear()
     store.policy_decisions.clear()
     store.add_contacts(WALLET_ID, target, [NOW, NOW, NOW])
-    run_pipeline(WALLET_ID, "run-b", store=store, settings=settings, now=NOW)
+    run_pipeline(WALLET_ID, "run-b", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer())
     denied = [d for d in store.policy_decisions[WALLET_ID] if d.user_pseudonym == target]
     assert denied and all(
         any(r.rule_code == RuleCode.FREQUENCY_CAP for r in d.denials) for d in denied
@@ -115,8 +115,8 @@ def test_frequency_cap_denies_recently_contacted_user(store, settings) -> None:
 
 def test_run_is_deterministic(settings) -> None:
     first, second = build_store(), build_store()
-    run_pipeline(WALLET_ID, "run-1", store=first, settings=settings, now=NOW)
-    run_pipeline(WALLET_ID, "run-1", store=second, settings=settings, now=NOW)
+    run_pipeline(WALLET_ID, "run-1", store=first, settings=settings, now=NOW, churn_scorer=fake_scorer())
+    run_pipeline(WALLET_ID, "run-1", store=second, settings=settings, now=NOW, churn_scorer=fake_scorer())
     assert first.recommendations[WALLET_ID] == second.recommendations[WALLET_ID]
 
 
@@ -124,7 +124,7 @@ def test_stage_failure_is_recorded_and_stops_the_run(store, settings) -> None:
     def broken_feed(_settings):
         raise RuntimeError("feed exploded")
 
-    result = run_pipeline(WALLET_ID, "run-x", store=store, settings=settings, now=NOW,
+    result = run_pipeline(WALLET_ID, "run-x", store=store, settings=settings, now=NOW, churn_scorer=fake_scorer(),
                           feed_loader=broken_feed)
     stages = {s.stage: s.status for s in result.stages}
     assert result.status == "FAILED"
@@ -150,3 +150,26 @@ def test_memory_store_refuses_non_pending_rows() -> None:
     )
     with pytest.raises(PermissionError):
         store.create_recommendations([rec])
+
+
+def test_risk_stage_uses_trained_artifact_scorer(store, settings) -> None:
+    result = run_pipeline(WALLET_ID, "run-1", store=store, settings=settings, now=NOW,
+                          churn_scorer=fake_scorer())
+    risk = {s.stage: s for s in result.stages}["RISK"]
+    assert risk.status == "DONE"
+    assert risk.detail["model"].startswith("TABPFN_ARTIFACT_4c210c32")
+    assert risk.detail["context_rows"] == 8948
+    scores = store.risk_scores[WALLET_ID]
+    assert scores and all(0.0 <= s.churn_risk <= 1.0 for s in scores)
+    assert all(s.model == risk.detail["model"] for s in scores)
+    # The fake model lowers risk for positive sentiment, so attribution is non-zero where attached.
+    assert all(s.external_signal_id is not None for s in scores if s.external_signal_contribution)
+
+
+def test_enabled_scorer_missing_fails_run_loudly(store, settings) -> None:
+    result = run_pipeline(WALLET_ID, "run-1", store=store, settings=settings, now=NOW)
+    stages = {s.stage: s for s in result.stages}
+    assert result.status == "FAILED"
+    assert stages["RISK"].status == "FAILED"
+    assert "ChurnScorerUnavailable" in stages["RISK"].detail["error"]
+    assert not store.recommendations[WALLET_ID]

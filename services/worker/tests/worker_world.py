@@ -1,16 +1,19 @@
 """Small hand-built synthetic world for worker tests. All data here is synthetic."""
 import json
+import os
 import random
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from core_contracts import Arm, Incentive, LabeledExample
+from worker.churn_scorer import ChurnRiskScorer
 from worker.memory_store import InMemoryStore
 from worker.settings import WorkerSettings
 from worker.store import TenantRecord
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "fixtures"
+ARTIFACTS = ROOT / "artifacts"
 NOW = datetime(2026, 9, 17, tzinfo=UTC)
 WALLET_ID = "11111111-1111-1111-1111-111111111111"
 PAYLATER_ID = "22222222-2222-2222-2222-222222222222"
@@ -37,10 +40,60 @@ def make_settings(**overrides) -> WorkerSettings:
         measurement_naive_pct=20,
         measurement_naive_risk_threshold=0.0,
         tabpfn_enabled=False,
+        churn_scorer_enabled=True,
+        churn_scorer_artifact_dir=str(ARTIFACTS),
+        churn_scorer_device="cpu",
+        churn_scorer_mapping_path=str(FIXTURES / "churn_scorer_mapping.json"),
         explain_llm_enabled=False,
     )
     values.update(overrides)
     return WorkerSettings(_env_file=None, **values)
+
+
+class FakeTabPFN:
+    """Stands in for TabPFNClassifier in tests: risk rises with recency, no weights needed."""
+
+    def __init__(self, **kwargs) -> None:
+        self.kwargs = kwargs
+        self.fit_rows = 0
+
+    def fit(self, X, y):
+        self.fit_rows = len(X)
+        self.classes_ = sorted({int(v) for v in y})
+        return self
+
+    def predict_proba(self, X):
+        p = (X["days_since_last_txn"].astype(float) / 60.0).clip(0.02, 0.98)
+        p = (p - X["external_sentiment"].astype(float) * 0.1).clip(0.0, 1.0)
+        return [[1.0 - v, v] for v in p]
+
+
+_SCORER: ChurnRiskScorer | None = None
+_REAL_SCORER: ChurnRiskScorer | None = None
+
+
+def tabpfn_token() -> str | None:
+    """TABPFN_TOKEN from the environment or the gitignored root .env."""
+    from dotenv import dotenv_values
+
+    return os.environ.get("TABPFN_TOKEN") or dotenv_values(ROOT / ".env").get("TABPFN_TOKEN") or None
+
+
+def real_scorer() -> ChurnRiskScorer:
+    """Real TabPFN over the artifact bundle, built once per session (slow on CPU)."""
+    global _REAL_SCORER
+    if _REAL_SCORER is None:
+        os.environ.setdefault("TABPFN_TOKEN", tabpfn_token() or "")
+        _REAL_SCORER = ChurnRiskScorer(ARTIFACTS, device="auto")
+    return _REAL_SCORER
+
+
+def fake_scorer() -> ChurnRiskScorer:
+    """Real artifact bundle + fake classifier, built once per test session."""
+    global _SCORER
+    if _SCORER is None:
+        _SCORER = ChurnRiskScorer(ARTIFACTS, device="cpu", classifier_factory=FakeTabPFN)
+    return _SCORER
 
 
 def _labeled(tenant_id: str, n: int, seed: int) -> list[LabeledExample]:
