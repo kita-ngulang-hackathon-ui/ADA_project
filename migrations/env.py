@@ -1,10 +1,13 @@
 """Alembic environment.
 
-Reads DATABASE_URL from the environment (never from alembic.ini, so the
-same migration set applies unchanged across local/ci/demo). Runs migrations
-as whatever role DATABASE_URL authenticates as -- in practice the Postgres
-superuser, since 0001 creates the app_worker/app_console/app_readonly roles
-that everything else depends on.
+Runs migrations as the Postgres superuser, built from POSTGRES_USER/
+POSTGRES_PASSWORD/POSTGRES_HOST/POSTGRES_PORT/POSTGRES_DB -- never from
+DATABASE_URL, which authenticates as app_console. Migration 0001 CREATEs
+the app_worker/app_console/app_readonly roles, so nothing can migrate as
+app_console on a fresh database; it doesn't exist yet. An explicit
+MIGRATE_DATABASE_URL overrides this construction if set, for anyone who
+wants a different migration-time role (e.g. a managed Postgres where the
+"superuser" concept doesn't apply).
 """
 import os
 import sys
@@ -34,13 +37,30 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
-    url = os.environ.get("DATABASE_URL")
-    if not url:
-        raise RuntimeError(
-            "DATABASE_URL is not set. Migrations never guess a connection string; "
-            "copy .env.example to .env and fill it in."
+    override = os.environ.get("MIGRATE_DATABASE_URL")
+    if override:
+        return override
+
+    host = os.environ.get("POSTGRES_HOST")
+    port = os.environ.get("POSTGRES_PORT")
+    db = os.environ.get("POSTGRES_DB")
+    user = os.environ.get("POSTGRES_USER")
+    password = os.environ.get("POSTGRES_PASSWORD")
+    missing = [
+        name
+        for name, value in (
+            ("POSTGRES_HOST", host), ("POSTGRES_PORT", port), ("POSTGRES_DB", db),
+            ("POSTGRES_USER", user), ("POSTGRES_PASSWORD", password),
         )
-    return url
+        if not value
+    ]
+    if missing:
+        raise RuntimeError(
+            f"Cannot build a migration connection string; missing {missing}. "
+            "Migrations never guess a connection string; copy .env.example to "
+            ".env and fill it in (or set MIGRATE_DATABASE_URL directly)."
+        )
+    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
 
 
 def run_migrations_offline() -> None:
