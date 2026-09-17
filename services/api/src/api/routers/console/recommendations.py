@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from api import errors
 from api.auth import ConsoleSession, require_console_reviewer
-from api.deps import db_for_tenant
+from api.deps import db_for_ingest, db_for_tenant
 
 router = APIRouter(prefix="/console/v1", tags=["console-recommendations"])
 
@@ -77,8 +77,8 @@ class RecommendationList(BaseModel):
 
 @router.get("/recommendations")
 def list_recommendations(
-    limit: int = Query(default=50, le=500),
-    cursor: int = Query(default=0),
+    limit: int = Query(default=50, ge=1, le=500),
+    cursor: int = Query(default=0, ge=0),
     console: ConsoleSession = Depends(require_console_reviewer),
 ) -> RecommendationList:
     """Pending approval queue (DEMO_SCRIPT beat 4: "everything sits in
@@ -183,10 +183,12 @@ def console_delivery_ack(
     except ValueError as exc:
         raise errors.not_found("recommendation not found") from exc
 
-    with db_for_tenant(console.tenant_id) as session:
+    # delivered_at/delivery_ref are granted to the worker role, not the console one.
+    with db_for_ingest(console.tenant_id) as session:
         try:
             row = recommendations_repo.mark_delivered(
-                session, tenant_id=console.tenant_id, recommendation_id=rec_uuid, delivery_ref=body.delivery_ref
+                session, tenant_id=console.tenant_id, recommendation_id=rec_uuid,
+                delivery_ref=body.delivery_ref, actor=console.reviewer_id,
             )
         except LookupError as exc:
             raise errors.not_found(str(exc)) from exc

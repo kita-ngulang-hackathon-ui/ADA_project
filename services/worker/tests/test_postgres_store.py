@@ -32,6 +32,7 @@ from core_contracts import (
     ImpactSegment,
     LabeledExample,
     PatternType,
+    RankingStrategy,
     Recommendation,
     RecommendationStatus,
     RiskScore,
@@ -223,12 +224,8 @@ def test_full_pipeline_store_round_trip(worker_engine, superuser_engine, tenant_
         ).scalar_one()
     assert count == 1
 
-    # --- stage bookkeeping, including the RANK-detail cache ---
+    # --- stage bookkeeping ---
     store.record_stage(StageRecord(run_id, tenant_id, "INGEST", "DONE", {}))
-    store.record_stage(StageRecord(run_id, tenant_id, "RANK", "DONE",
-                                   {"ranking_strategy": "FALLBACK", "context_rows": 42}))
-    assert store._rank_context_rows == 42
-    assert store._rank_strategy_db == "FALLBACK"
 
     # --- circles: GRAPH -> RISK bridge ---
     snapshot = CircleSnapshot(user_pseudonym="user-a", circle_size=3,
@@ -276,8 +273,8 @@ def test_full_pipeline_store_round_trip(worker_engine, superuser_engine, tenant_
     assert outcome == "ALLOW"
 
     # --- experiment + arms ---
-    experiment_id = store.get_or_create_experiment(tenant_id)
-    assert store.get_or_create_experiment(tenant_id) == experiment_id
+    experiment_id = store.get_or_create_experiment(tenant_id, control_pct=20, naive_pct=20)
+    assert store.get_or_create_experiment(tenant_id, control_pct=20, naive_pct=20) == experiment_id
     store.save_arm_assignments(tenant_id, experiment_id, {"user-a": Arm.ENGINE})
 
     # --- allocation: individual candidate + group candidate ---
@@ -299,7 +296,8 @@ def test_full_pipeline_store_round_trip(worker_engine, superuser_engine, tenant_
     )
     result = AllocationResult(strategy="EXACT_DP", budget_idr=100_000, spent_idr=50_000,
                               objective_value_idr=64_000.0, decisions=decisions)
-    store.save_allocation(tenant_id, run_id, result, [], [individual, group_member])
+    store.save_allocation(tenant_id, run_id, result, [], [individual, group_member],
+                          RankingStrategy.FALLBACK, 42)
     assert store._allocation_run_id is not None
     with superuser_engine.connect() as conn:
         candidate_rows = conn.execute(

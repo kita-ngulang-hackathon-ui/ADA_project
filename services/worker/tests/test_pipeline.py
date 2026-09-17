@@ -16,6 +16,14 @@ from worker.store import PipelineStore
 from worker_world import NOW, PAYLATER_ID, WALLET_ID, build_store, fake_scorer, make_settings
 
 
+def test_stage_list_matches_persistence() -> None:
+    """pipeline_runs.stages is seeded from PIPELINE_STAGES; a stage the
+    worker runs but the row has no slot for would go unreported."""
+    from persistence.models import PIPELINE_STAGES
+
+    assert STAGES == list(PIPELINE_STAGES)
+
+
 def _all_decisions(store, tenant_id):
     result, extra = store.allocations[tenant_id][-1]
     return list(result.decisions) + extra

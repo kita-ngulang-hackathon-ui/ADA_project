@@ -35,3 +35,12 @@ def test_session_with_unknown_reviewer_is_forbidden(client):
     resp = client.post("/console/v1/session", json={"tenant_slug": "demo-wallet", "reviewer_id": "nobody"})
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "FORBIDDEN"
+
+
+def test_request_validation_uses_the_error_envelope(client):
+    response = client.post("/console/v1/session", json={"reviewer_id": 1})
+    assert response.status_code == 400
+    body = response.json()["error"]
+    assert body["code"] == "VALIDATION_FAILED"
+    assert body["request_id"].startswith("req_")
+    assert body["details"]["errors"]

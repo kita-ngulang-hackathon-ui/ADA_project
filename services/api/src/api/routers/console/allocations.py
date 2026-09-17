@@ -1,13 +1,14 @@
-"""POST/GET /console/v1/allocations -- budget run result: selected,
+"""GET /console/v1/allocations/{id} -- budget run result: selected,
 runner-ups, exclusion reasons (requirement 7).
 
 Same layering rule as pipeline.py: this service does not run policy-guard,
-ranker, or allocator -- it records the requested budget as a pending
-allocation_runs row for the worker to fill in, then GET reads back whatever
-the worker wrote (or 202/empty while it is still running). Demo beat 3 needs
-the FULL candidate list, selected and excluded, which is why the read model
-below always returns every allocation_candidates row for the run, not only
-the winners.
+ranker, or allocator. It only reads back what the worker wrote for a run it
+allocated under DEFAULT_BUDGET_IDR. Demo beat 3 needs the FULL candidate
+list, selected and excluded, which is why the read model below returns every
+allocation_candidates row for the run, not only the winners.
+
+There is deliberately no POST: a console-created allocation_runs row was a
+placeholder no worker ever read, so it reported a budget that never ran.
 """
 from __future__ import annotations
 
@@ -22,41 +23,6 @@ from api.auth import ConsoleSession, require_console_reviewer
 from api.deps import db_for_tenant
 
 router = APIRouter(prefix="/console/v1", tags=["console-allocations"])
-
-
-class AllocationRequestIn(BaseModel):
-    budget_idr: int
-    experiment_id: str | None = None
-    dry_run: bool = False
-
-
-class AllocationAccepted(BaseModel):
-    allocation_run_id: str
-    budget_idr: int
-    status: str = "PENDING"
-
-
-@router.post("/allocations", status_code=202)
-def request_allocation(
-    body: AllocationRequestIn, console: ConsoleSession = Depends(require_console_reviewer)
-) -> AllocationAccepted:
-    if body.budget_idr <= 0:
-        raise errors.validation_failed("budget_idr must be a positive integer")
-
-    with db_for_tenant(console.tenant_id) as session:
-        run = allocations_repo.create_run(
-            session,
-            tenant_id=console.tenant_id,
-            budget_idr=body.budget_idr,
-            strategy="EXACT_DP",
-            ranking_strategy="FALLBACK",
-            context_row_count=0,
-            objective_value_idr=0,
-            candidate_count=0,
-            selected_count=0,
-            created_by=console.reviewer_id,
-        )
-    return AllocationAccepted(allocation_run_id=str(run.id), budget_idr=body.budget_idr)
 
 
 class CandidateOut(BaseModel):

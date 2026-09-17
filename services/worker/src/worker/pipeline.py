@@ -1,6 +1,7 @@
-"""Pipeline orchestration (see services/worker/README.md for the 10 stages).
+"""Pipeline orchestration (see services/worker/README.md for the stages).
 
-INGEST -> EXTERNAL -> GRAPH -> RISK -> IMPACT -> POLICY -> RANK -> ALLOCATE -> EXPLAIN -> PERSIST
+INGEST -> FEEDBACK -> EXTERNAL -> GRAPH -> RISK -> IMPACT -> POLICY -> RANK -> ALLOCATE
+-> EXPLAIN -> PERSIST
 
 - Every stage records PENDING/RUNNING/DONE/FAILED/SKIPPED with a detail dict.
 - Config values are passed explicitly into L1 functions; L1 never reads env.
@@ -53,11 +54,13 @@ from pydantic import ValidationError
 from worker import feed_adapter
 from worker.churn_scorer import ChurnScorerUnavailable, load_mapping
 from worker.llm_narrator import narrate_or_fallback
+from worker.outcomes import ingest_outcomes
 from worker.store import PipelineStore, StageRecord
 
 log = logging.getLogger(__name__)
 
-STAGES = ["INGEST", "EXTERNAL", "GRAPH", "RISK", "IMPACT", "POLICY", "RANK", "ALLOCATE", "EXPLAIN", "PERSIST"]
+STAGES = ["INGEST", "FEEDBACK", "EXTERNAL", "GRAPH", "RISK", "IMPACT", "POLICY", "RANK", "ALLOCATE",
+          "EXPLAIN", "PERSIST"]
 
 ACTOR = "app_worker"
 MODEL_HEURISTIC = "HEURISTIC_NO_CONTEXT"
@@ -88,6 +91,7 @@ class Pick:
     runner_up: RankedCandidate | None
     candidate_ids: tuple[str, ...]
     rank: int | None
+    policy: PolicyDecision
     group_id: str | None = None
     members: tuple[str, ...] = ()
 
@@ -118,6 +122,7 @@ class _Run:
     user_facts: dict[str, UserFacts] = field(default_factory=dict)
     exclusions: dict[str, ExclusionReason] = field(default_factory=dict)
     ranked: list[RankedCandidate] = field(default_factory=list)
+    rank_context_rows: int = 0
     allocation: Any = None
     arms: dict[str, Arm] = field(default_factory=dict)
     picks: list[Pick] = field(default_factory=list)
@@ -165,6 +170,12 @@ def _ingest(run: _Run, store: PipelineStore, settings, **_) -> dict:
     run.users = sorted(by_user)
     run.attributes = store.load_user_attributes(run.tenant_id)
     return {"processed": processed, "unmapped": unmapped, "users_in_window": len(run.users)}
+
+
+def _feedback(run: _Run, store: PipelineStore, settings, **_) -> dict:
+    """Measured outcomes become labeled rows before anything scores this run
+    (requirement 11). Runs ahead of RISK/IMPACT/RANK, which all read them."""
+    return ingest_outcomes(store, run.tenant_id, settings)
 
 
 def _external(run: _Run, store: PipelineStore, settings, feed_loader, **_) -> dict:
@@ -426,6 +437,7 @@ def _policy(run: _Run, store: PipelineStore, settings, **_) -> dict:
 def _rank(run: _Run, store: PipelineStore, settings, **_) -> dict:
     allowed = [c for c in run.candidates if c.candidate_id not in run.exclusions]
     context = ranker.build_context(run.labeled)
+    run.rank_context_rows = len(context)
     run.ranked = ranker.rank(context, allowed, min_context_rows=settings.ranker_min_context_rows,
                              seed=settings.tabpfn_seed, use_tabpfn=settings.tabpfn_enabled)
     strategy = run.ranked[0].ranking_strategy.value if run.ranked else None
@@ -450,7 +462,9 @@ def _bundle_rep(members: list[RankedCandidate], priority: float) -> RankedCandid
 
 
 def _allocate(run: _Run, store: PipelineStore, settings, **_) -> dict:
-    experiment_id = store.get_or_create_experiment(run.tenant_id)
+    experiment_id = store.get_or_create_experiment(run.tenant_id,
+                                                   control_pct=settings.measurement_control_pct,
+                                                   naive_pct=settings.measurement_naive_pct)
     secret = settings.measurement_hmac_secret.encode()
     units = set(run.users) | {_unit(c) for c in run.candidates}
     run.arms = {
@@ -498,15 +512,19 @@ def _allocate(run: _Run, store: PipelineStore, settings, **_) -> dict:
             runner_rep = _bundle_rep(runner_members, runner[0].priority) if runner else None
             run.picks.append(Pick(arm=Arm.ENGINE, top=top, runner_up=runner_rep,
                                   candidate_ids=tuple(d.candidate_id for d in chosen),
-                                  rank=chosen[0].rank, group_id=key.removeprefix("group:"),
+                                  rank=chosen[0].rank, policy=run.decisions[chosen[0].candidate_id],
+                                  group_id=key.removeprefix("group:"),
                                   members=tuple(m.candidate.user_pseudonym for m in top_members)))
         else:
             run.picks.append(Pick(arm=Arm.ENGINE, top=top_members[0],
                                   runner_up=runner_members[0] if runner else None,
-                                  candidate_ids=(chosen[0].candidate_id,), rank=chosen[0].rank))
+                                  candidate_ids=(chosen[0].candidate_id,), rank=chosen[0].rank,
+                                  policy=run.decisions[chosen[0].candidate_id]))
 
     naive_picks = _naive_arm(run, settings, exclude)
-    store.save_allocation(run.tenant_id, run.run_id, run.allocation, extra, run.candidates)
+    strategy = run.ranked[0].ranking_strategy if run.ranked else None
+    store.save_allocation(run.tenant_id, run.run_id, run.allocation, extra, run.candidates,
+                          strategy, run.rank_context_rows)
     return {
         "experiment_id": experiment_id,
         "strategy": run.allocation.strategy,
@@ -537,22 +555,23 @@ def _naive_arm(run: _Run, settings, exclude: Callable) -> int:
             for c in candidates:
                 exclude(c, ExclusionReason.NAIVE_BELOW_THRESHOLD)
             continue
-        allowed = []
+        allowed: list[tuple[Candidate, PolicyDecision]] = []
         for c in sorted(candidates, key=lambda c: (c.cost_idr, c.incentive_code)):
             decision = evaluate(c, run.user_facts[user], config)
             if decision.allowed:
-                allowed.append(c)
+                allowed.append((c, decision))
             else:
                 exclude(c, _exclusion_for(decision, c.segment))
         if not allowed:
             continue
         ranked = [RankedCandidate(candidate=c, priority=c.churn_risk,
-                                  ranking_strategy=RankingStrategy.NAIVE_RISK_ONLY) for c in allowed]
+                                  ranking_strategy=RankingStrategy.NAIVE_RISK_ONLY) for c, _ in allowed]
         for r in ranked[1:]:
             exclude(r.candidate, ExclusionReason.NAIVE_NOT_CHOSEN, r.priority)
         run.picks.append(Pick(arm=Arm.NAIVE, top=ranked[0],
                               runner_up=ranked[1] if len(ranked) > 1 else None,
-                              candidate_ids=(ranked[0].candidate.candidate_id,), rank=None))
+                              candidate_ids=(ranked[0].candidate.candidate_id,), rank=None,
+                              policy=allowed[0][1]))
         picks += 1
     return picks
 
@@ -604,13 +623,11 @@ def _explain(run: _Run, store: PipelineStore, settings, narrator, **_) -> dict:
                           "spent_idr": run.allocation.spent_idr,
                           "selected_count": len({d.choice_key for d in run.allocation.selected}),
                           "rank": pick.rank}
-            policy = run.decisions[pick.candidate_ids[0]]
         else:
             allocation = {"strategy": RankingStrategy.NAIVE_RISK_ONLY.value,
                           "risk_threshold": settings.measurement_naive_risk_threshold}
-            policy = evaluate(c, run.user_facts[user], _policy_config(settings, apply_segment_rule=False))
         sheet = build_fact_sheet(
-            pick.top, risk, impact_score, circle, policy, allocation,
+            pick.top, risk, impact_score, circle, pick.policy, allocation,
             runner_up=pick.runner_up, display_names=display, external_signal=signal, arm=pick.arm,
             subject_type="GROUP" if pick.group_id else "USER",
             subject_ref=pick.group_id or user, member_count=len(pick.members) or 1,
@@ -679,7 +696,7 @@ def _persist(run: _Run, store: PipelineStore, settings, **_) -> dict:
 
 
 _STAGE_FUNCS = {
-    "INGEST": _ingest, "EXTERNAL": _external, "GRAPH": _graph, "RISK": _risk, "IMPACT": _impact,
+    "INGEST": _ingest, "FEEDBACK": _feedback, "EXTERNAL": _external, "GRAPH": _graph, "RISK": _risk, "IMPACT": _impact,
     "POLICY": _policy, "RANK": _rank, "ALLOCATE": _allocate, "EXPLAIN": _explain, "PERSIST": _persist,
 }
 

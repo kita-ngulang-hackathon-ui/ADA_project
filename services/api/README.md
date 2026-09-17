@@ -12,7 +12,7 @@ on this system (§4, "no client-side SDK").
 ## Layer rules
 - May import: `core_contracts`, `ingest_mapping` (only for mapping validation), `persistence`.
 - Must not import scoring packages (`churn_risk`, `impact`, `ranker`, `allocator`, `explain` narrator). Those run in the worker.
-- Connects to Postgres as `app_console` for console routes (the only role that can approve) and as `app_worker`-equivalent insert-only rights for ingestion.
+- Connects to Postgres as `app_console` (`DATABASE_URL`) for console routes -- the only role that can approve -- and as `app_worker` (`WORKER_DATABASE_URL`) for ingestion routes and delivery acks, the only role granted those inserts and updates.
 
 ## Files to implement
 

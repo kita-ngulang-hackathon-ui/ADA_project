@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     database_url: str
+    # Ingestion-side writes (raw_events, outcome_events, delivery acks) need the
+    # app_worker grants from migration 0006; the console role has none of them.
+    # Empty falls back to database_url, which only works if that URL is already
+    # a role with those grants.
+    worker_database_url: str = ""
     db_pool_size: int = 10
     db_pool_max_overflow: int = 5
     db_echo: bool = False
@@ -39,6 +44,8 @@ class Settings(BaseSettings):
     console_session_secret: str
     console_demo_reviewers: str
     console_require_reviewer_id: bool = True
+    console_session_ttl_seconds: int = 43_200  # 12h; the cookie carries its own expiry
+    measurement_min_arm_size: int = 30
 
     @field_validator(
         "database_url", "api_key_hash_pepper", "console_session_secret", "console_demo_reviewers"
@@ -51,6 +58,10 @@ class Settings(BaseSettings):
                 "-- fill in .env; this application fails loudly rather than defaulting"
             )
         return v
+
+    @property
+    def ingest_database_url(self) -> str:
+        return self.worker_database_url or self.database_url
 
     @property
     def cors_origins_list(self) -> list[str]:

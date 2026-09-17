@@ -7,7 +7,10 @@ implement the same Protocol.
 There is deliberately no method that approves, rejects, or delivers a
 recommendation: the worker can reach PENDING_APPROVAL and no further (requirement 8).
 
-`save_allocation` takes the full `candidates` list (not just the allocator's
+`save_allocation` takes the RANK stage's `ranking_strategy` and
+`context_row_count` because `allocation_runs` needs both and neither
+AllocationResult nor AllocationDecision carries them. It also takes the full
+`candidates` list (not just the allocator's
 decisions) because `allocation_candidates` rows need incentive_code,
 churn_risk, impact_score, segment, and pattern_type -- none of which
 AllocationDecision carries, and no other Protocol method passes Candidate
@@ -38,6 +41,7 @@ from core_contracts import (
     LabeledExample,
     OutcomeEvent,
     PolicyDecision,
+    RankingStrategy,
     Recommendation,
     RiskScore,
 )
@@ -96,12 +100,13 @@ class PipelineStore(Protocol):
                            segments: dict[str, ImpactSegment]) -> None: ...
     def save_policy_decisions(self, tenant_id: str, run_id: str,
                               decisions: list[PolicyDecision]) -> None: ...
-    def get_or_create_experiment(self, tenant_id: str) -> str: ...
+    def get_or_create_experiment(self, tenant_id: str, *, control_pct: int, naive_pct: int) -> str: ...
     def save_arm_assignments(self, tenant_id: str, experiment_id: str,
                              arms: dict[str, Arm]) -> None: ...
     def save_allocation(self, tenant_id: str, run_id: str, result: AllocationResult,
                         extra_decisions: list[AllocationDecision],
-                        candidates: list[Candidate]) -> None: ...
+                        candidates: list[Candidate], ranking_strategy: RankingStrategy | None,
+                        context_row_count: int) -> None: ...
     def save_narration(self, tenant_id: str, run_id: str, fact_sheet_hash: str, text: str,
                        source: str) -> None: ...
     def save_feature_snapshots(self, snapshots: list[FeatureSnapshot]) -> None: ...

@@ -30,8 +30,8 @@ class AuditList(BaseModel):
 
 @router.get("/audit-log")
 def list_audit_log(
-    limit: int = Query(default=50, le=500),
-    cursor: int = Query(default=0),
+    limit: int = Query(default=50, ge=1, le=500),
+    cursor: int = Query(default=0, ge=0),
     console: ConsoleSession = Depends(require_console_reviewer),
 ) -> AuditList:
     with db_for_tenant(console.tenant_id) as session:

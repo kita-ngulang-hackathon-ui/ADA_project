@@ -114,11 +114,12 @@ def get_user(session: Session, *, tenant_id: str, user_pseudonym: str) -> User |
 
 
 def get_latest_impact_scores(session: Session, *, tenant_id: str, user_pseudonym: str) -> list[ImpactScoreRow]:
-    """All per-incentive impact rows for one user's latest compute -- the
-    console picks the PERSUADABLE one(s) to show."""
+    """The newest impact row per incentive for one user -- the console picks
+    the PERSUADABLE one(s) to show."""
     stmt = (
         select(ImpactScoreRow)
         .where(ImpactScoreRow.tenant_id == tenant_id, ImpactScoreRow.user_pseudonym == user_pseudonym)
+        .distinct(ImpactScoreRow.incentive_code)
         .order_by(ImpactScoreRow.incentive_code, ImpactScoreRow.computed_at.desc())
     )
     return list(session.execute(stmt).scalars().all())

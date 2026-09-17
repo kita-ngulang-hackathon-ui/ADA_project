@@ -287,8 +287,10 @@ class ImpactScoreRow(Base):
 # Pipeline runs (drives GET /console/v1/pipeline/runs/{id})
 # --------------------------------------------------------------------------
 
+# Kept in step with worker.pipeline.STAGES (services/worker/tests/test_pipeline.py asserts it).
 PIPELINE_STAGES: tuple[str, ...] = (
-    "INGEST", "EXTERNAL", "GRAPH", "RISK", "IMPACT", "POLICY", "RANK", "ALLOCATE", "EXPLAIN", "PERSIST",
+    "INGEST", "FEEDBACK", "EXTERNAL", "GRAPH", "RISK", "IMPACT", "POLICY", "RANK", "ALLOCATE",
+    "EXPLAIN", "PERSIST",
 )
 
 

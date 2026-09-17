@@ -18,10 +18,9 @@ from pydantic import BaseModel
 from api import errors
 from api.auth import ConsoleSession, require_console_reviewer
 from api.deps import db_for_tenant
+from api.settings import get_settings
 
 router = APIRouter(prefix="/console/v1", tags=["console-measurement"])
-
-_MIN_ARM_SIZE = 30  # MEASUREMENT_MIN_ARM_SIZE default; overridable via settings later.
 
 
 class MeasurementOut(BaseModel):
@@ -72,7 +71,7 @@ def get_measurement(
         for arm, n in n_by_arm.items()
     ]
 
-    result = compute_lift(outcomes_payload, min_arm_size=_MIN_ARM_SIZE)
+    result = compute_lift(outcomes_payload, min_arm_size=get_settings().measurement_min_arm_size)
 
     return MeasurementOut(
         experiment_id=str(experiment.id),

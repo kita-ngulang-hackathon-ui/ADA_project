@@ -14,9 +14,16 @@ import time
 import uuid
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.errors import ApiError, api_error_handler, internal, unhandled_exception_handler
+from api.errors import (
+    ApiError,
+    api_error_handler,
+    internal,
+    request_validation_handler,
+    unhandled_exception_handler,
+)
 from api.routers import health, ingest
 from api.routers.console import (
     allocations,
@@ -36,6 +43,8 @@ from api.routers.console import (
 )
 from api.settings import get_settings
 
+_READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -54,13 +63,18 @@ def create_app() -> FastAPI:
     async def request_id_and_timeout(request: Request, call_next):
         request.state.request_id = f"req_{uuid.uuid4().hex[:20]}"
         start = time.monotonic()
+        # Handlers are sync: abandoning one mid-write does not roll it back,
+        # so only reads get a deadline. A POST that outlives the timeout would
+        # otherwise report failure to the client and still commit.
+        deadline = settings.api_request_timeout_seconds if request.method in _READ_METHODS else None
         try:
-            response = await asyncio.wait_for(
-                call_next(request), timeout=settings.api_request_timeout_seconds
-            )
+            if deadline is None:
+                response = await call_next(request)
+            else:
+                response = await asyncio.wait_for(call_next(request), timeout=deadline)
         except TimeoutError:
             return await api_error_handler(
-                request, internal(f"request exceeded API_REQUEST_TIMEOUT_SECONDS={settings.api_request_timeout_seconds}s")
+                request, internal(f"request exceeded API_REQUEST_TIMEOUT_SECONDS={deadline}s")
             )
         except ApiError as exc:
             return await api_error_handler(request, exc)
@@ -72,6 +86,7 @@ def create_app() -> FastAPI:
         return response
 
     app.add_exception_handler(ApiError, api_error_handler)
+    app.add_exception_handler(RequestValidationError, request_validation_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
     app.include_router(health.router)
