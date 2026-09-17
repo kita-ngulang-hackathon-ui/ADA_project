@@ -1,4 +1,11 @@
 {
-  "_comment": "TODO: fill with canned signals. scope_type in CLIENT|REGION|COHORT; signal_type in NEWS_SENTIMENT|SOCIAL_SENTIMENT|SECTOR_TREND; value in [-1,1]. No user fields.",
-  "items": []
+  "_comment": "Canned external market/sentiment feed (requirement 2). SYNTHETIC. Items are scoped to CLIENT / REGION / COHORT only; no user fields. The negative COHORT signal backs planted pattern P2 (MARKET_DRIVEN).",
+  "snapshot_at": "2026-09-16T00:00:00+07:00",
+  "items": [
+    {"source": "canned", "scope_type": "CLIENT", "scope_key": "demo-wallet", "signal_type": "SECTOR_TREND", "value": -0.10, "observed_at": "2026-09-15T08:00:00+07:00", "headline": "E-wallet transaction growth slows this quarter"},
+    {"source": "canned", "scope_type": "CLIENT", "scope_key": "demo-paylater", "signal_type": "NEWS_SENTIMENT", "value": -0.25, "observed_at": "2026-09-14T08:00:00+07:00", "headline": "Regulator tightens paylater disclosure rules"},
+    {"source": "canned", "scope_type": "REGION", "scope_key": "ID-JK", "signal_type": "SOCIAL_SENTIMENT", "value": 0.15, "observed_at": "2026-09-15T12:00:00+07:00", "headline": "Positive chatter about cashless payments in Jakarta"},
+    {"source": "canned", "scope_type": "REGION", "scope_key": "ID-JB", "signal_type": "NEWS_SENTIMENT", "value": -0.05, "observed_at": "2026-09-13T12:00:00+07:00", "headline": "Mixed coverage of digital wallet outages in West Java"},
+    {"source": "canned", "scope_type": "COHORT", "scope_key": "cohort-3", "signal_type": "SECTOR_TREND", "value": -0.62, "observed_at": "2026-09-16T08:00:00+07:00", "headline": "Gig-worker income dip hits cohort-wide spending"}
+  ]
 }

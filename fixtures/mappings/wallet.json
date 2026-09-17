@@ -1,6 +1,15 @@
 {
-  "_comment": "TODO: map demo-wallet client event types to canonical types (e.g. wallet.transfer.sent -> P2P_TRANSFER).",
+  "_comment": "Event type mapping config for the demo-wallet tenant (requirement 1). Synthetic demo vocabulary.",
   "tenant_slug": "demo-wallet",
   "profile_type": "WALLET",
-  "mappings": []
+  "mappings": [
+    {"client_event_type": "wallet.transfer.sent", "canonical_event_type": "P2P_TRANSFER", "amount_field_path": "payload.amount", "counterparty_field_path": "payload.recipient_ref"},
+    {"client_event_type": "wallet.split.created", "canonical_event_type": "SPLIT_BILL_CREATED", "amount_field_path": "payload.total", "counterparty_field_path": "payload.split_with_ref"},
+    {"client_event_type": "wallet.split.settled", "canonical_event_type": "SPLIT_BILL_SETTLED", "amount_field_path": "payload.share", "counterparty_field_path": "payload.split_with_ref"},
+    {"client_event_type": "wallet.bill.autopay", "canonical_event_type": "RECURRING_PAYMENT", "amount_field_path": "payload.amount", "counterparty_field_path": "payload.payee_ref"},
+    {"client_event_type": "wallet.topup.completed", "canonical_event_type": "TOPUP", "amount_field_path": "payload.amount"},
+    {"client_event_type": "wallet.payment.merchant", "canonical_event_type": "PAYMENT", "amount_field_path": "payload.amount"},
+    {"client_event_type": "wallet.withdraw.completed", "canonical_event_type": "WITHDRAWAL", "amount_field_path": "payload.amount"},
+    {"client_event_type": "wallet.app.opened", "canonical_event_type": "SESSION_OPEN"}
+  ]
 }

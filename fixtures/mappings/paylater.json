@@ -1,6 +1,13 @@
 {
-  "_comment": "TODO: map demo-paylater client event types to canonical types (e.g. paylater.installment.overdue -> LOAN_REPAYMENT_LATE).",
+  "_comment": "Event type mapping config for the demo-paylater tenant (requirement 1). Synthetic demo vocabulary.",
   "tenant_slug": "demo-paylater",
   "profile_type": "LENDING",
-  "mappings": []
+  "mappings": [
+    {"client_event_type": "paylater.loan.disbursed", "canonical_event_type": "LOAN_DISBURSED", "amount_field_path": "payload.principal"},
+    {"client_event_type": "paylater.installment.paid", "canonical_event_type": "LOAN_REPAYMENT", "amount_field_path": "payload.amount_paid"},
+    {"client_event_type": "paylater.installment.overdue", "canonical_event_type": "LOAN_REPAYMENT_LATE", "amount_field_path": "payload.amount_due"},
+    {"client_event_type": "paylater.checkout.completed", "canonical_event_type": "PAYMENT", "amount_field_path": "payload.order_total"},
+    {"client_event_type": "paylater.app.session", "canonical_event_type": "SESSION_OPEN"},
+    {"client_event_type": "paylater.cs.ticket", "canonical_event_type": "SUPPORT_CONTACT"}
+  ]
 }

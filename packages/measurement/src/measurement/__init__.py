@@ -1,4 +1,5 @@
-"""measurement (L1) — Arm assignment (CONTROL / NAIVE / ENGINE) and incremental lift.
+"""measurement (L1) — Arm assignment (CONTROL / NAIVE / ENGINE) and incremental lift."""
+from measurement.assignment import CONTROL, ENGINE, NAIVE, assign_arm, bucket
+from measurement.lift import compute_lift
 
-Re-export the public API of this package here once implemented.
-"""
+__all__ = ["CONTROL", "ENGINE", "NAIVE", "assign_arm", "bucket", "compute_lift"]

@@ -1,0 +1,30 @@
+{
+  "_comment": "Maps canonical pipeline data onto the trained churn scorer contract (artifacts/context_schema.json). SYNTHETIC demo vocabulary. amount_scale_idr converts IDR transaction amounts into the scorer's synthetic amount units (context median avg_amount_30d ~77). business_value_scale_idr converts the pipeline's IDR business value (30-day volume x PIPELINE_BUSINESS_VALUE_MONTHS) into base_business_value, clipped to the context range.",
+  "amount_scale_idr": 1000,
+  "business_value_scale_idr": 25000,
+  "base_business_value_range": [10, 465],
+  "profile_by_type": {
+    "WALLET": "Everyday Wallet",
+    "LENDING": "PayLater Explorer",
+    "PAYLATER": "PayLater Explorer",
+    "SAVINGS": "Growth Saver",
+    "MULTI_PRODUCT": "Premium Multi-product"
+  },
+  "default_profile": "Everyday Wallet",
+  "region_by_code": {
+    "ID-AC": "West", "ID-SU": "West", "ID-SB": "West", "ID-RI": "West", "ID-KR": "West",
+    "ID-JA": "West", "ID-SS": "West", "ID-BB": "West", "ID-BE": "West", "ID-LA": "West",
+    "ID-JK": "Central", "ID-JB": "Central", "ID-BT": "Central", "ID-JT": "Central", "ID-YO": "Central",
+    "ID-JI": "East", "ID-BA": "East", "ID-NB": "East", "ID-NT": "East",
+    "ID-KB": "North", "ID-KT": "North", "ID-KS": "North", "ID-KI": "North", "ID-KU": "North",
+    "ID-SA": "North", "ID-GO": "North", "ID-ST": "North",
+    "ID-SN": "South", "ID-SG": "South", "ID-SR": "South", "ID-MA": "South", "ID-MU": "South",
+    "ID-PA": "South", "ID-PB": "South"
+  },
+  "default_region": "Central",
+  "signal_rules": {
+    "positive_threshold": 0.10,
+    "negative_threshold": 0.10,
+    "support_friction_min_contacts": 2
+  }
+}

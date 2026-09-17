@@ -2,22 +2,36 @@
 
 Signals attach at CLIENT, REGION, or COHORT scope only. This model must
 never carry a user or counterparty identifier (UU PDP boundary, §4).
-
-TODO:
-- ScopeType enum: CLIENT, REGION, COHORT.
-- SignalType enum: NEWS_SENTIMENT, SOCIAL_SENTIMENT, SECTOR_TREND.
-- ExternalSignal model with value constrained to [-1, 1], extra='forbid'.
 """
+from datetime import datetime
 from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from core_contracts.ids import new_id
 
 
 class ScopeType(str, Enum):
-    """TODO."""
+    CLIENT = "CLIENT"
+    REGION = "REGION"
+    COHORT = "COHORT"
 
 
 class SignalType(str, Enum):
-    """TODO."""
+    NEWS_SENTIMENT = "NEWS_SENTIMENT"
+    SOCIAL_SENTIMENT = "SOCIAL_SENTIMENT"
+    SECTOR_TREND = "SECTOR_TREND"
 
 
-class ExternalSignal:
-    """TODO: pydantic model, no user field allowed."""
+class ExternalSignal(BaseModel):
+    """No user field allowed: extra='forbid' rejects any attempt to add one."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    signal_id: str = Field(default_factory=new_id)
+    source: str
+    scope_type: ScopeType
+    scope_key: str
+    signal_type: SignalType
+    value: float = Field(ge=-1.0, le=1.0)
+    observed_at: datetime

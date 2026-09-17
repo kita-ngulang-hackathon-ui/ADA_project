@@ -1,0 +1,88 @@
+{
+  "created_utc": "2026-09-17T13:03:39.698843+00:00",
+  "disclosure": "Synthetic-demo data and evaluation only; not evidence of real-world churn performance.",
+  "seed": 20260917,
+  "synthetic_rows": 12000,
+  "source_datasets": {
+    "murilozangari/customer-churn-from-a-bank": {
+      "normalized_rows": 10000,
+      "source_churn_rate": 0.2037
+    },
+    "saurabhbadole/bank-customer-churn-prediction-dataset": {
+      "normalized_rows": 10000,
+      "source_churn_rate": 0.2037
+    }
+  },
+  "generation": {
+    "snapshot_start": "2026-02-03",
+    "snapshot_end": "2026-08-01",
+    "snapshot_days": 180,
+    "target_prevalence_requested": 0.22259,
+    "target_prevalence_realized": 0.21658333333333332,
+    "risk_intercept": -1.3649624670014
+  },
+  "split": {
+    "context_rows": 8948,
+    "holdout_rows": 3052,
+    "context_last_date": "2026-06-17",
+    "holdout_first_date": "2026-06-18"
+  },
+  "tabpfn": {
+    "terminology": "fit/context construction; no gradient-descent fine-tuning",
+    "constructor": {
+      "device": "cuda",
+      "categorical_features_indices": [
+        0,
+        1,
+        10
+      ],
+      "n_estimators": 4,
+      "fit_mode": "low_memory",
+      "memory_saving_mode": true,
+      "random_state": 20260917
+    },
+    "fit_seconds": 12.294365684501827,
+    "score_seconds": 1.8355965251103044
+  },
+  "synthetic_holdout_metrics": {
+    "roc_auc": 0.7938621488560672,
+    "average_precision": 0.585539414241622,
+    "log_loss": 0.44815492630004883,
+    "brier_score": 0.1438158005475998
+  },
+  "leakage_checks": {
+    "row_count": 12000,
+    "unique_users": 12000,
+    "snapshot_days": 180,
+    "missing_model_values": 0,
+    "identifier_in_features": false,
+    "timestamp_in_features": false,
+    "provenance_in_features": false,
+    "raw_bank_field_in_features": false
+  },
+  "environment": {
+    "python": "3.13.15",
+    "platform": "Linux-5.15.0-117-generic-x86_64-with-glibc2.39",
+    "torch": "2.11.0+cu128",
+    "tabpfn": "9.0.0",
+    "kagglehub": "1.0.2",
+    "pandas": "3.0.5",
+    "numpy": "2.5.3",
+    "scikit_learn": "1.9.1",
+    "pyarrow": "25.0.1",
+    "gpu": {
+      "name": "NVIDIA L40S",
+      "count": 1,
+      "vram_gib": 12.0,
+      "torch_cuda_build": "12.8"
+    }
+  },
+  "artifacts": {
+    "synthetic_churn_context.parquet": {
+      "sha256": "4c210c326f69a40cca94f1f4f4f24c600fb943e139ed7feb3868c93222dfe018"
+    },
+    "context_schema.json": {
+      "sha256": "e3c454b936caf35d68b27b5241630c35e16d9441eda05e5d962ef5059d0f6c20"
+    }
+  }
+}

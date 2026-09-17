@@ -1,4 +1,10 @@
 {
-  "_comment": "OPEN DECISION (REQUIREMENTS section 6): exact incentive catalog. Fields: code, display_name, cost_idr, encourages_borrowing, is_group.",
-  "incentives": []
+  "_comment": "PROVISIONAL placeholder catalog. The real incentive catalog is an OPEN DECISION (REQUIREMENTS section 6); replace before the demo. Fields: code, display_name, cost_idr, encourages_borrowing, changes_credit_terms, is_group, applicable_profile_types.",
+  "incentives": [
+    {"code": "CASHBACK_10K", "display_name": "Cashback Rp 10.000 on next payment", "cost_idr": 10000, "encourages_borrowing": false, "is_group": false, "applicable_profile_types": ["WALLET", "LENDING"]},
+    {"code": "TRANSFER_FEE_WAIVER_30D", "display_name": "Free transfers for 30 days", "cost_idr": 7500, "encourages_borrowing": false, "is_group": false, "applicable_profile_types": ["WALLET"]},
+    {"code": "SPLIT_BILL_GROUP_REWARD", "display_name": "Group reward when the circle splits a bill", "cost_idr": 5000, "encourages_borrowing": false, "is_group": true, "applicable_profile_types": ["WALLET"]},
+    {"code": "INSTALLMENT_DISCOUNT_NEXT_PURCHASE", "display_name": "Discount on the next paylater purchase", "cost_idr": 15000, "encourages_borrowing": true, "is_group": false, "applicable_profile_types": ["LENDING"]},
+    {"code": "ONTIME_REPAYMENT_BADGE_POINTS", "display_name": "Loyalty points for on-time repayment", "cost_idr": 5000, "encourages_borrowing": false, "is_group": false, "applicable_profile_types": ["LENDING"]}
+  ]
 }
