@@ -54,6 +54,7 @@ services:
     volumes:
       - tabpfn-cache:/models
       - ./fixtures:/app/fixtures:ro
+      - ./artifacts:/app/artifacts:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

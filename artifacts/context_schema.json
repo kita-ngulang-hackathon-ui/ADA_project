@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_kind": "synthetic_fintech_snapshot_demo",
+  "row_count": 12000,
+  "target": {
+    "name": "churned_30d",
+    "dtype": "int8",
+    "positive_class": 1,
+    "definition": "Simulated dormancy during the 30 days following snapshot_date."
+  },
+  "model_features_ordered": [
+    {
+      "name": "client_profile",
+      "dtype": "category",
+      "kind": "categorical",
+      "categories": [
+        "Everyday Wallet",
+        "PayLater Explorer",
+        "Growth Saver",
+        "Premium Multi-product"
+      ],
+      "description": "Synthetic product-engagement segment."
+    },
+    {
+      "name": "region",
+      "dtype": "category",
+      "kind": "categorical",
+      "categories": [
+        "North",
+        "Central",
+        "South",
+        "East",
+        "West"
+      ],
+      "description": "Synthetic operating region; not raw source geography."
+    },
+    {
+      "name": "txn_count_30d",
+      "dtype": "int16",
+      "kind": "numerical",
+      "categories": null,
+      "description": "Transactions observed in the 30 days before the snapshot."
+    },
+    {
+      "name": "active_days_30d",
+      "dtype": "int16",
+      "kind": "numerical",
+      "categories": null,
+      "description": "Distinct active days in the 30 days before the snapshot."
+    },
+    {
+      "name": "days_since_last_txn",
+      "dtype": "int16",
+      "kind": "numerical",
+      "categories": null,
+      "description": "Recency at the snapshot, capped at 60 days."
+    },
+    {
+      "name": "avg_amount_30d",
+      "dtype": "float32",
+      "kind": "numerical",
+      "categories": null,
+      "description": "Synthetic average transaction amount over the prior 30 days."
+    },
+    {
+      "name": "total_amount_30d",
+      "dtype": "float32",
+      "kind": "numerical",
+      "categories": null,
+      "description": "Synthetic total transaction amount over the prior 30 days."
+    },
+    {
+      "name": "amount_trend_90d",
+      "dtype": "float32",
+      "kind": "numerical",
+      "categories": null,
+      "description": "Synthetic normalized amount trend over the prior 90 days."
+    },
+    {
+      "name": "activity_trend_90d",
+      "dtype": "float32",
+      "kind": "numerical",
+      "categories": null,
+      "description": "Synthetic normalized activity trend over the prior 90 days."
+    },
+    {
+      "name": "external_sentiment",
+      "dtype": "float32",
+      "kind": "numerical",
+      "categories": null,
+      "description": "Synthetic external sentiment score in [-1, 1]."
+    },
+    {
+      "name": "external_signal_name",
+      "dtype": "category",
+      "kind": "categorical",
+      "categories": [
+        "stable",
+        "positive_momentum",
+        "support_friction",
+        "income_pressure",
+        "competitor_pull"
+      ],
+      "description": "Synthetic categorized external signal."
+    },
+    {
+      "name": "base_business_value",
+      "dtype": "float32",
+      "kind": "numerical",
+      "categories": null,
+      "description": "Synthetic baseline business value for downstream ranking."
+    }
+  ],
+  "split": {
+    "column": "split",
+    "context_value": "context",
+    "holdout_value": "holdout",
+    "rule": "Oldest 75% of unique snapshot dates are context; newest 25% are holdout."
+  },
+  "excluded_from_model": {
+    "user_id": "synthetic identifier",
+    "snapshot_date": "raw timestamp used only for chronological splitting and as_of",
+    "source_dataset": "provenance metadata",
+    "source_churn_signal": "label-provenance metadata",
+    "churned_30d": "prediction target"
+  },
+  "inference_output": {
+    "fields": [
+      "user_id",
+      "churn_risk",
+      "as_of"
+    ],
+    "synthetic_demo_only": true
+  }
+}

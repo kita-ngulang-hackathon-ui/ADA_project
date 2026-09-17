@@ -2,3 +2,8 @@
 .claude/
 REQUIREMENTS (1).md
 
+
+# Secrets
+.env
+.env.*
+!.env.example

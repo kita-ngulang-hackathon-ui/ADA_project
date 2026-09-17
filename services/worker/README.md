@@ -31,6 +31,7 @@ reading/writing the DB, fetching the external feed, calling the LLM.
 | `src/worker/llm_narrator.py` | Implements `explain.narrator_protocol.Narrator` with `httpx`. Provider/model from `EXPLAIN_LLM_*` (open decision). Timeout `EXPLAIN_LLM_TIMEOUT_S`, temperature 0. Cache by `fact_sheet_hash`. Any failure or validator rejection falls back to `explain.template`. `EXPLAIN_LLM_ENABLED=false` means template only (offline demo). |
 | `src/worker/store.py` | `PipelineStore` Protocol: everything the pipeline reads and writes. No approve/reject/deliver method exists. |
 | `src/worker/memory_store.py` | `InMemoryStore` implementing the Protocol, tenant-isolated. Used by tests and the offline CLI until the Postgres store lands. |
+| `src/worker/churn_scorer.py` | `ChurnRiskScorer`: verifies artifact hashes and schema, fits TabPFN once on `split == "context"` rows, validates candidates, returns `{user_id, churn_risk, as_of}`. `python -m worker.churn_scorer --verify` checks the bundle. Needs `TABPFN_TOKEN` (or a cached checkpoint); for GPU install the cu128 torch wheel first. |
 | `src/worker/outcomes.py` | Turn outcome events into labeled examples via `feedback`, persist them, update the counter. |
 
 ## Tests to write

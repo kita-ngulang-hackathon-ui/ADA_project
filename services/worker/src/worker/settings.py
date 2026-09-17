@@ -4,7 +4,7 @@ Values left as "__TBD__" (open decisions, REQUIREMENTS §6) become None. The
 frequency cap in particular is never defaulted: None makes the policy guard
 fail closed.
 """
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 TBD = "__TBD__"
@@ -46,6 +46,16 @@ class WorkerSettings(BaseSettings):
     tabpfn_seed: int = 42
     tabpfn_max_context_rows: int = 1000
     risk_min_context_rows: int = 30
+    # Trained TabPFN churn scorer (artifacts/ bundle). Enabled means it must load; no silent fallback.
+    churn_scorer_enabled: bool = True
+    churn_scorer_artifact_dir: str = "artifacts"
+    churn_scorer_device: str = "auto"  # auto | cuda | cpu
+    churn_scorer_verify_hashes: bool = True
+    # CPU fallback for the ~9k-row context (TabPFN blocks >5000 rows on CPU by default).
+    churn_scorer_allow_cpu_large_context: bool = True
+    churn_scorer_mapping_path: str = "fixtures/churn_scorer_mapping.json"
+    # Prior Labs checkpoint token. Secret: lives in .env (gitignored) or the platform's secret store.
+    tabpfn_token: str | None = Field(default=None, repr=False)
 
     # Intervention Impact Engine (requirement 6)
     impact_seed: int = 42
@@ -88,7 +98,7 @@ class WorkerSettings(BaseSettings):
     @field_validator(
         "frequency_cap_max_contacts", "frequency_cap_window_days", "external_signal_live_base_url",
         "explain_llm_base_url", "explain_llm_model", "explain_llm_api_key",
-        "tabpfn_model_cache_dir", mode="before",
+        "tabpfn_model_cache_dir", "tabpfn_token", mode="before",
     )
     @classmethod
     def _tbd_is_unset(cls, value):
