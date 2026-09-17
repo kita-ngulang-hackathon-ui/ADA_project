@@ -14,4 +14,5 @@ def list_incentives(session: Session, *, tenant_id: str, active_only: bool = Tru
     stmt = select(IncentiveModel).where(IncentiveModel.tenant_id == tenant_id)
     if active_only:
         stmt = stmt.where(IncentiveModel.active.is_(True))
-    return list(session.execute(stmt).scalars().order_by(IncentiveModel.code).all())
+    stmt = stmt.order_by(IncentiveModel.code)
+    return list(session.execute(stmt).scalars().all())

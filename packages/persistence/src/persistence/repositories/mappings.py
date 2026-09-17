@@ -14,7 +14,8 @@ def list_mappings(session: Session, *, tenant_id: str, active_only: bool = False
     stmt = select(EventTypeMapping).where(EventTypeMapping.tenant_id == tenant_id)
     if active_only:
         stmt = stmt.where(EventTypeMapping.active.is_(True))
-    return list(session.execute(stmt).scalars().order_by(EventTypeMapping.client_event_type).all())
+    stmt = stmt.order_by(EventTypeMapping.client_event_type)
+    return list(session.execute(stmt).scalars().all())
 
 
 def upsert_mapping(
