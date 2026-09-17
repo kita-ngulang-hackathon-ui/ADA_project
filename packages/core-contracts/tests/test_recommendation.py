@@ -14,28 +14,45 @@ from core_contracts.recommendation import (
     "src,dst",
     [
         (RecommendationStatus.DRAFT, RecommendationStatus.PENDING_APPROVAL),
-        (RecommendationStatus.PENDING_APPROVAL, RecommendationStatus.REJECTED),
         (RecommendationStatus.PENDING_APPROVAL, RecommendationStatus.EXPIRED),
-        (RecommendationStatus.APPROVED, RecommendationStatus.DELIVERED),
     ],
 )
 def test_legal_transitions_without_reviewer(src, dst):
+    """DRAFT->PENDING_APPROVAL is worker-originated; EXPIRED is
+    scheduler-originated. Neither needs a human reviewer."""
     assert_transition(src, dst, reviewer_id=None)
 
 
-def test_approved_requires_reviewer():
+@pytest.mark.parametrize(
+    "src,dst",
+    [
+        (RecommendationStatus.PENDING_APPROVAL, RecommendationStatus.APPROVED),
+        (RecommendationStatus.PENDING_APPROVAL, RecommendationStatus.REJECTED),
+        (RecommendationStatus.APPROVED, RecommendationStatus.DELIVERED),
+    ],
+)
+def test_reviewer_required_transitions_reject_missing_reviewer(src, dst):
+    """APPROVED, REJECTED, and DELIVERED all require an identified human
+    reviewer -- matching persistence's own CHECK constraints
+    (ck_recommendations_approved_needs_reviewer,
+    ck_recommendations_rejected_needs_reviewer,
+    ck_recommendations_delivered_needs_review_and_delivery)."""
     with pytest.raises(IllegalTransition):
-        assert_transition(
-            RecommendationStatus.PENDING_APPROVAL, RecommendationStatus.APPROVED, reviewer_id=None
-        )
+        assert_transition(src, dst, reviewer_id=None)
+    with pytest.raises(IllegalTransition):
+        assert_transition(src, dst, reviewer_id="   ")  # blank/whitespace-only also rejected
 
 
-def test_approved_with_reviewer_succeeds():
-    assert_transition(
-        RecommendationStatus.PENDING_APPROVAL,
-        RecommendationStatus.APPROVED,
-        reviewer_id="ops_reviewer_1",
-    )
+@pytest.mark.parametrize(
+    "src,dst",
+    [
+        (RecommendationStatus.PENDING_APPROVAL, RecommendationStatus.APPROVED),
+        (RecommendationStatus.PENDING_APPROVAL, RecommendationStatus.REJECTED),
+        (RecommendationStatus.APPROVED, RecommendationStatus.DELIVERED),
+    ],
+)
+def test_reviewer_required_transitions_succeed_with_reviewer(src, dst):
+    assert_transition(src, dst, reviewer_id="ops_reviewer_1")
 
 
 def test_transition_table_rejects_every_unlisted_edge():

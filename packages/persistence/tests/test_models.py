@@ -4,7 +4,7 @@ Full integration coverage (idempotent insert, RLS, role grants) requires
 Postgres -- see tests/invariants/, which the README already documents as
 needing `docker compose up postgres`.
 """
-from persistence.models import Base, RLS_TABLE_NAMES
+from persistence.models import RLS_TABLE_NAMES, Base
 
 EXPECTED_TABLES = {
     "tenants", "api_keys", "event_type_mappings", "incentives",
@@ -16,7 +16,7 @@ EXPECTED_TABLES = {
     "allocation_runs", "allocation_candidates",
     "recommendations", "narrations", "contact_log",
     "experiments", "experiment_assignments", "outcome_events",
-    "labeled_examples", "audit_log",
+    "labeled_examples", "audit_log", "feature_snapshots",
 }
 
 

@@ -88,7 +88,12 @@ class IncentiveModel(Base):
     display_name: Mapped[str] = mapped_column(String, nullable=False)
     cost_idr: Mapped[int] = mapped_column(BigInteger, nullable=False)
     encourages_borrowing: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # Anything touching credit limits or pricing (section 4); flagged so policy-guard can deny it.
+    changes_credit_terms: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # subject_type='GROUP' IS core_contracts.Incentive.is_group -- no separate column.
     subject_type: Mapped[str] = mapped_column(String, nullable=False, default="USER")
+    # Empty list means applicable to every tenant profile type.
+    applicable_profile_types: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
@@ -298,6 +303,9 @@ class PipelineRun(Base):
     id: Mapped[uuid.UUID] = _uuid_pk()
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="QUEUED")
+    # Incremented on every claim. The worker retries up to WORKER_MAX_RETRIES,
+    # counting a crashed (stale RUNNING) claim as one attempt.
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     stages: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     external_source: Mapped[str | None] = mapped_column(String, nullable=True)
     ranking_strategy: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -527,6 +535,32 @@ class LabeledExample(Base):
     retained: Mapped[bool] = mapped_column(Boolean, nullable=False)
     realized_value_idr: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     feature_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FeatureSnapshotRow(Base):
+    """Features and scores captured at recommendation time (requirement 11).
+
+    Feedback reads this snapshot, never later data, so labeled examples never
+    leak outcome information back into their own features.
+    """
+
+    __tablename__ = "feature_snapshots"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "run_id", "user_pseudonym", name="uq_feature_snapshots_run_user"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    user_pseudonym: Mapped[str] = mapped_column(String, nullable=False)
+    features: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    churn_risk: Mapped[float | None] = mapped_column(nullable=True)
+    impact_score: Mapped[float | None] = mapped_column(nullable=True)
+    pattern_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    incentive_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    cost_idr: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    business_value_idr: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

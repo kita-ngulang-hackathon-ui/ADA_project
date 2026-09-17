@@ -322,7 +322,7 @@ def _impact(run: _Run, store: PipelineStore, settings, **_) -> dict:
                              sure_thing_p=settings.impact_sure_thing_p_not_incentivized)
         run.segments[user] = seg
         counts[seg.value] += 1
-    store.save_impact_scores(run.tenant_id, run.run_id, run.impact)
+    store.save_impact_scores(run.tenant_id, run.run_id, run.impact, run.segments)
     return {"available": True, "model": scores[0].model if scores else None,
             "treated_rows": len(treated), "control_rows": len(control), "segments": dict(counts)}
 
@@ -506,7 +506,7 @@ def _allocate(run: _Run, store: PipelineStore, settings, **_) -> dict:
                                   candidate_ids=(chosen[0].candidate_id,), rank=chosen[0].rank))
 
     naive_picks = _naive_arm(run, settings, exclude)
-    store.save_allocation(run.tenant_id, run.run_id, run.allocation, extra)
+    store.save_allocation(run.tenant_id, run.run_id, run.allocation, extra, run.candidates)
     return {
         "experiment_id": experiment_id,
         "strategy": run.allocation.strategy,

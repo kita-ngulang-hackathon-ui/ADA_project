@@ -6,7 +6,13 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from persistence.models import ImpactScoreRow, LabeledExample, RiskScoreRow, TransactionCircle
+from persistence.models import (
+    CircleMember,
+    ImpactScoreRow,
+    LabeledExample,
+    RiskScoreRow,
+    TransactionCircle,
+)
 
 
 def write_risk_scores(session: Session, *, tenant_id: str, rows: list[dict]) -> list[RiskScoreRow]:
@@ -31,6 +37,14 @@ def write_circle_snapshots(session: Session, *, tenant_id: str, rows: list[dict]
     session.add_all(written)
     session.flush()
     return written
+
+
+def write_circle_members(
+    session: Session, *, tenant_id: str, circle_id: uuid.UUID, user_pseudonyms: list[str]
+) -> None:
+    session.add_all(
+        CircleMember(circle_id=circle_id, tenant_id=tenant_id, user_pseudonym=u) for u in user_pseudonyms
+    )
 
 
 def get_latest_risk_score(session: Session, *, tenant_id: str, user_pseudonym: str) -> RiskScoreRow | None:
