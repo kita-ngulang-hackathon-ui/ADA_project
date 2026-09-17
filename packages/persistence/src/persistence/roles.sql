@@ -1,12 +1,62 @@
 -- Reference SQL for DB roles, grants, and the approval guard (requirement 8).
--- Apply through an Alembic migration; this file documents the intent.
+-- This file documents intent for a human reader; the SQL that actually runs
+-- lives in migrations/versions/0001_tenants_and_roles.py (role creation) and
+-- migrations/versions/0006_rls.py (grants, RLS, transition trigger). Keep
+-- this file in sync with those two migrations if either changes.
+
+-- 1. Three login roles. Passwords come from APP_WORKER_DB_PASSWORD /
+--    APP_CONSOLE_DB_PASSWORD / APP_READONLY_DB_PASSWORD at migrate time --
+--    never hardcoded, never defaulted (see .env.example, 0001's upgrade()).
 --
--- TODO:
--- 1. CREATE ROLE app_worker, app_console, app_readonly (LOGIN, passwords from env).
--- 2. GRANT INSERT on recommendations to app_worker; UPDATE(status, reviewed_by,
---    reviewed_at, review_note) only to app_console.
--- 3. CHECK (status <> 'APPROVED'  OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL))
---    CHECK (status <> 'DELIVERED' OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL))
--- 4. BEFORE UPDATE trigger rejecting transitions not in the state machine.
--- 5. ENABLE ROW LEVEL SECURITY + policy USING (tenant_id = current_setting('app.tenant_id')::uuid)
---    on every domain table.
+--   CREATE ROLE app_worker   LOGIN PASSWORD '<from env>';
+--   CREATE ROLE app_console  LOGIN PASSWORD '<from env>';
+--   CREATE ROLE app_readonly LOGIN PASSWORD '<from env>';
+
+-- 2. Column-level grants on `recommendations`. This is the load-bearing
+--    split: app_worker can INSERT a new row and later flip it to EXPIRED or
+--    DELIVERED (the two transitions the worker/ingestion path legitimately
+--    drives), but has no UPDATE grant on reviewed_by/reviewed_at/review_note
+--    -- the columns the CHECK constraint below requires for APPROVED. Only
+--    app_console can ever set those, so only app_console can ever produce a
+--    row with status = APPROVED.
+--
+--   GRANT INSERT ON recommendations TO app_worker;
+--   GRANT UPDATE (status, delivered_at, delivery_ref) ON recommendations TO app_worker;
+--   GRANT UPDATE (status, reviewed_by, reviewed_at, review_note) ON recommendations TO app_console;
+
+-- 3. CHECK constraints (defined on the table itself in migration 0004):
+--
+--   CHECK (status <> 'APPROVED'  OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL))
+--   CHECK (status <> 'REJECTED'  OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL))
+--   CHECK (status <> 'DELIVERED' OR (reviewed_by IS NOT NULL AND delivered_at IS NOT NULL))
+
+-- 4. BEFORE UPDATE trigger rejecting any status transition not in the
+--    frozen table (mirrors core_contracts.recommendation.ALLOWED_TRANSITIONS
+--    exactly -- see migration 0006 for the plpgsql body):
+--
+--     DRAFT -> PENDING_APPROVAL
+--     PENDING_APPROVAL -> APPROVED | REJECTED | EXPIRED
+--     APPROVED -> DELIVERED
+--
+--    An UPDATE issued from a raw psql prompt as any role, including the
+--    migration superuser, cannot bypass this -- it is a table trigger, not
+--    an application-layer check.
+
+-- 5. ENABLE ROW LEVEL SECURITY + policy on every domain table except
+--    `tenants` (nothing wider to scope it by) and `api_keys` (auth must
+--    resolve tenant_id FROM the key before app.tenant_id can be set):
+--
+--   ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;
+--   CREATE POLICY tenant_isolation ON <table>
+--     USING      (tenant_id = current_setting('app.tenant_id', true)::uuid)
+--     WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+--
+--   `persistence.session.tenant_session()` runs `SET LOCAL app.tenant_id`
+--   inside the transaction before any query executes.
+
+-- Non-negotiable test: test_worker_role_cannot_approve connects as
+-- app_worker and asserts that any attempt to set status = 'APPROVED' fails
+-- -- either at the grant (column not writable) or at the CHECK constraint
+-- (reviewed_by/reviewed_at not settable, so never non-null). This test
+-- failing means requirement 8 is broken regardless of what the application
+-- code says.
