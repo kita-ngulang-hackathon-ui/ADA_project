@@ -2,3 +2,18 @@
 .claude/
 REQUIREMENTS (1).md
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+apps/web/.next/
+
+# Env
+.env
+
