@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "core-contracts",
     "ingest-mapping",
+    "measurement",
     "persistence",
     "fastapi",
     "uvicorn[standard]",
@@ -22,4 +23,5 @@ packages = ["src/api"]
 [tool.uv.sources]
 core-contracts = { workspace = true }
 ingest-mapping = { workspace = true }
+measurement = { workspace = true }
 persistence = { workspace = true }
