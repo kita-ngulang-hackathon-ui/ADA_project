@@ -6,6 +6,17 @@ implement the same Protocol.
 
 There is deliberately no method that approves, rejects, or delivers a
 recommendation: the worker can reach PENDING_APPROVAL and no further (requirement 8).
+
+`save_allocation` takes the full `candidates` list (not just the allocator's
+decisions) because `allocation_candidates` rows need incentive_code,
+churn_risk, impact_score, segment, and pattern_type -- none of which
+AllocationDecision carries, and no other Protocol method passes Candidate
+objects through at all.
+
+`save_impact_scores` takes `segments` alongside `scores` because
+`core_contracts.ImpactScore` carries no segment field (impact.segment() is a
+separate call the pipeline makes right after scoring), yet `impact_scores`
+rows need one.
 """
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,12 +26,14 @@ from core_contracts import (
     AllocationDecision,
     AllocationResult,
     Arm,
+    Candidate,
     CanonicalEvent,
     Circle,
     CircleSnapshot,
     ExternalSignal,
     FeatureSnapshot,
     ImpactScore,
+    ImpactSegment,
     Incentive,
     LabeledExample,
     OutcomeEvent,
@@ -79,15 +92,16 @@ class PipelineStore(Protocol):
     def save_circles(self, tenant_id: str, run_id: str, snapshots: list[CircleSnapshot],
                      circles: list[Circle]) -> None: ...
     def save_risk_scores(self, tenant_id: str, run_id: str, scores: list[RiskScore]) -> None: ...
-    def save_impact_scores(self, tenant_id: str, run_id: str,
-                           scores: dict[str, ImpactScore]) -> None: ...
+    def save_impact_scores(self, tenant_id: str, run_id: str, scores: dict[str, ImpactScore],
+                           segments: dict[str, ImpactSegment]) -> None: ...
     def save_policy_decisions(self, tenant_id: str, run_id: str,
                               decisions: list[PolicyDecision]) -> None: ...
     def get_or_create_experiment(self, tenant_id: str) -> str: ...
     def save_arm_assignments(self, tenant_id: str, experiment_id: str,
                              arms: dict[str, Arm]) -> None: ...
     def save_allocation(self, tenant_id: str, run_id: str, result: AllocationResult,
-                        extra_decisions: list[AllocationDecision]) -> None: ...
+                        extra_decisions: list[AllocationDecision],
+                        candidates: list[Candidate]) -> None: ...
     def save_narration(self, tenant_id: str, run_id: str, fact_sheet_hash: str, text: str,
                        source: str) -> None: ...
     def save_feature_snapshots(self, snapshots: list[FeatureSnapshot]) -> None: ...

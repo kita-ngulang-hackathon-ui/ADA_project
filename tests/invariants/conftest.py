@@ -62,7 +62,7 @@ def _can_connect(host: str, port: str, user: str, password: str, dbname: str) ->
             conn.execute(sa.text("SELECT 1"))
         engine.dispose()
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001 -- connection failures vary by driver/OS; any of them means "skip"
         return False
 
 
