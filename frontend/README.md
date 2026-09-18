@@ -25,16 +25,20 @@ is hosted separately. That backend must list this app's origin in its
 
 ## Files to implement
 
+Not built yet. The placeholder `<main>TODO</main>` pages that used to sit at
+these paths were removed, so the routes 404 until each one is written.
+Console pages live under the `app/(console)/` route group.
+
 | File | What to implement |
 |---|---|
 | `app/layout.tsx` | Root layout, nav, synthetic-data banner, tenant switcher (wallet / paylater demo tenants). |
 | `app/page.tsx` | Overview: pipeline run button + stage progress, counts by segment and pattern. |
-| `app/users/[pseudonym]/page.tsx` | User detail: churn risk, `delta_stability` chart (Recharts), `pattern_type` badge, external signal context, impact segment, reasons. Demo beats 1–2. |
-| `app/allocation/page.tsx` | Budget input, run allocation, selected vs excluded table with exclusion reasons and runner-ups. Demo beat 3. |
-| `app/ops/recommendations/page.tsx` | Pending approval queue. |
-| `app/ops/recommendations/[id]/page.tsx` | Detail with narration (LLM or TEMPLATE label), top pick + runner-up, approve / reject with note. Demo beat 4. |
-| `app/client-surface/page.tsx` | Simulated fintech app screen showing approved incentives; sends delivery-ack. Demo beat 5. |
-| `app/measurement/page.tsx` | Three-arm comparison (CONTROL / NAIVE / ENGINE), lift charts, "new labeled examples added" counter. Demo beat 6. |
+| `app/(console)/users/[pseudonym]/page.tsx` | User detail: churn risk, `delta_stability` chart (Recharts), `pattern_type` badge, external signal context, impact segment, reasons. Demo beats 1–2. |
+| `app/(console)/allocation/page.tsx` | Budget input, run allocation, selected vs excluded table with exclusion reasons and runner-ups. Demo beat 3. |
+| `app/(console)/ops/recommendations/page.tsx` | Pending approval queue. |
+| `app/(console)/ops/recommendations/[id]/page.tsx` | Detail with narration (LLM or TEMPLATE label), top pick + runner-up, approve / reject with note. Demo beat 4. |
+| `app/(console)/client-surface/page.tsx` | Simulated fintech app screen showing approved incentives; sends delivery-ack. Demo beat 5. |
+| `app/(console)/measurement/page.tsx` | Three-arm comparison (CONTROL / NAIVE / ENGINE), lift charts, "new labeled examples added" counter. Demo beat 6. |
 | `lib/api.ts` | Typed fetch client for console endpoints, error envelope handling, cursor pagination. |
 | `lib/types.ts` | TypeScript mirrors of API response shapes. |
 | `components/` | Shared UI (see `components/README.md`). |

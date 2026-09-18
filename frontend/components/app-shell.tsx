@@ -13,7 +13,6 @@ type NavItem = {
   icon: NavIconName;
 };
 
-// Old stub pages (allocation, measurement, ...) stay routable but are not listed.
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: "home" },
   { label: "Suggested Actions", href: "/suggested-actions", icon: "sparkle" },

@@ -11,7 +11,7 @@ API_BASE ?= http://localhost:8000
 # Must be on CONSOLE_DEMO_REVIEWERS; there is no default reviewer (requirement 8).
 REVIEWER ?= ops_reviewer_1
 
-.PHONY: help up down logs migrate seed synthetic reseed pipeline demo test test-tabpfn test-invariants lint lint-imports typecheck fmt preflight clean deploy-sync deploy-migrate run-api run-worker check-llm
+.PHONY: help up down logs migrate seed synthetic mock-run reseed pipeline demo test test-tabpfn test-invariants lint lint-imports typecheck fmt preflight clean deploy-sync deploy-migrate run-api run-worker check-llm
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -35,6 +35,9 @@ synthetic: ## Regenerate synthetic fixtures (deterministic)
 seed: ## Load tenants, mappings, incentives, canned feed, synthetic events
 	uv run python -m tools.synthetic.load_fixture
 
+mock-run: ## One pipeline pass over an in-memory mock world (no database); uses the configured narrator
+	uv run python -m tools.synthetic.run_mock_pipeline
+
 reseed: ## Drop and reload demo data
 	$(COMPOSE) down -v && $(MAKE) up migrate seed
 
@@ -56,8 +59,7 @@ demo: up migrate seed ## Full bootstrap, then print demo URLs
 	@echo "The console is a separate app. Start it from ../frontend (npm run dev),"
 	@echo "with NEXT_PUBLIC_API_BASE_URL pointed at this API:"
 	@echo "  Console         http://localhost:3000"
-	@echo "  Client surface  http://localhost:3000/client-surface"
-	@echo "  Measurement     http://localhost:3000/measurement"
+	@echo "  Dashboard       http://localhost:3000/dashboard"
 
 test: ## Run the full Python test suite
 	uv run pytest

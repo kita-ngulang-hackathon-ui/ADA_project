@@ -8,6 +8,13 @@ synthetic and must be labeled as such wherever performance is shown (§4).
 - Output goes to `fixtures/` and is loaded by `make seed`.
 - Planted patterns exist so the demo is reproducible; the pipeline must still **discover** them from data, never read the plant labels.
 
+## Already here
+
+| File | What it does |
+|---|---|
+| `mock_world.py` | Small in-memory world: both tenants, ~20 wallet users in two circles, 12 paylater users, and the prior campaign rows the impact model needs. Writes no fixtures and plants none of P1-P7. |
+| `run_mock_pipeline.py` | `make mock-run`. One full pipeline pass over that world with no database, using the narrator configured in `.env`. Prints every stage and the reason source of each narration, so an LLM endpoint can be verified end to end. |
+
 ## Files to implement
 
 | File | What to implement |
