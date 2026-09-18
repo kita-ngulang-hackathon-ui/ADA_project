@@ -1,12 +1,7 @@
-// Derived numbers: portfolio totals and per-action churn forecasts.
-import {
-  ACTIONS,
-  RISK_BANDS,
-  SEGMENTS,
-  type ActionDefinition,
-  type RiskCounts,
-  type Segment,
-} from "@/lib/mock-data";
+// Derived numbers: portfolio totals and per-action churn forecasts. Segments
+// and actions come from live data (components/actions-provider.tsx) rather
+// than a static import, so every function here takes them as arguments.
+import { RISK_BANDS, type ActionDefinition, type RiskCounts, type Segment } from "@/lib/mock-data";
 
 export const sumRisk = (risk: RiskCounts) => risk.low + risk.medium + risk.high;
 
@@ -18,19 +13,18 @@ const addRisk = (a: RiskCounts, b: RiskCounts): RiskCounts => ({
 
 const ZERO: RiskCounts = { low: 0, medium: 0, high: 0 };
 
-export const PORTFOLIO_RISK: RiskCounts = SEGMENTS.reduce(
-  (total, segment) => addRisk(total, segment.risk),
-  ZERO,
-);
+export function computePortfolioRisk(segments: Segment[]): RiskCounts {
+  return segments.reduce((total, segment) => addRisk(total, segment.risk), ZERO);
+}
 
-export const TOTAL_CUSTOMERS = sumRisk(PORTFOLIO_RISK);
-
-// Slices for the churn risk donut.
-export const CHURN_RISK_SLICES = RISK_BANDS.map((band) => ({
-  label: band.label,
-  users: PORTFOLIO_RISK[band.key],
-  color: band.color,
-}));
+export function computeChurnRiskSlices(segments: Segment[]) {
+  const portfolio = computePortfolioRisk(segments);
+  return RISK_BANDS.map((band) => ({
+    label: band.label,
+    users: portfolio[band.key],
+    color: band.color,
+  }));
+}
 
 // Apply an action's forecast movements to one segment's risk counts.
 function applyEffect(segment: Segment, action: ActionDefinition): RiskCounts {
@@ -58,10 +52,13 @@ export type ActionForecast = {
   segments: SegmentForecast[];
 };
 
-export function forecastAction(action: ActionDefinition): ActionForecast {
-  const segments = SEGMENTS.map((segment) => {
+export function forecastAction(action: ActionDefinition, segments: Segment[]): ActionForecast {
+  const portfolioRisk = computePortfolioRisk(segments);
+  const totalCustomers = sumRisk(portfolioRisk) || 1;
+
+  const segmentForecasts = segments.map((segment) => {
     const after = applyEffect(segment, action);
-    const size = sumRisk(segment.risk);
+    const size = sumRisk(segment.risk) || 1;
     const currentHighPct = (segment.risk.high / size) * 100;
     const forecastHighPct = (after.high / size) * 100;
     return {
@@ -73,21 +70,17 @@ export function forecastAction(action: ActionDefinition): ActionForecast {
     };
   });
 
-  const forecast = segments.reduce((total, item) => addRisk(total, item.after), ZERO);
-  const customersLeavingHighRisk = PORTFOLIO_RISK.high - forecast.high;
+  const forecast = segmentForecasts.reduce((total, item) => addRisk(total, item.after), ZERO);
+  const customersLeavingHighRisk = portfolioRisk.high - forecast.high;
 
   return {
-    current: PORTFOLIO_RISK,
+    current: portfolioRisk,
     forecast,
     customersLeavingHighRisk,
-    highRiskReductionPp: (customersLeavingHighRisk / TOTAL_CUSTOMERS) * 100,
-    segments: segments.map(({ after: _after, ...rest }) => rest),
+    highRiskReductionPp: (customersLeavingHighRisk / totalCustomers) * 100,
+    segments: segmentForecasts.map(({ after: _after, ...rest }) => rest),
   };
 }
-
-const FORECASTS = new Map(ACTIONS.map((action) => [action.id, forecastAction(action)]));
-
-export const getForecast = (id: string) => FORECASTS.get(id)!;
 
 // A reduction in high-risk share, shown as a signed change: 1.3 -> "−1.3pp".
 export const formatReductionPp = (reduction: number) =>

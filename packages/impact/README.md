@@ -9,7 +9,7 @@ non-incentivized users. Run the candidate through both.
 - Imports: `core_contracts`, `numpy`, `scikit-learn`, `tabpfn`. No I/O.
 - Both context sets from one tenant only.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

@@ -1,4 +1,4 @@
-# [PROJECT NAME TBD] — local and demo stack. See README.md.
+# ADA Solutions — local and demo stack. See README.md.
 #
 # The worker image ships without the TabPFN extra on purpose (see
 # services/worker/Dockerfile): torch plus a first-use weight download is the

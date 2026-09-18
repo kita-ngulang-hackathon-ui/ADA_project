@@ -11,7 +11,7 @@ baseline (requirement 10, demo beat 6).
 ## Layer rules
 - Imports: `core_contracts` only. No I/O. Secret passed in.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

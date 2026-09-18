@@ -1,4 +1,4 @@
-# uv workspace root for [PROJECT NAME TBD].
+# uv workspace root for ADA Solutions.
 [project]
 name = "retention-engine-workspace"
 version = "0.0.0"

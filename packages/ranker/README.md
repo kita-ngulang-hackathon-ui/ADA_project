@@ -8,7 +8,7 @@ incremental retained value from past labeled examples.
 ## Layer rules
 - Imports: `core_contracts`, `numpy`, `tabpfn`. No I/O.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

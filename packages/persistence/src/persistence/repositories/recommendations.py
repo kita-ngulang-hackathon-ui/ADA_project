@@ -95,6 +95,21 @@ def list_pending(session: Session, *, tenant_id: str, limit: int = 50, offset: i
     return list(session.execute(stmt).scalars().all())
 
 
+def list_by_statuses(
+    session: Session, *, tenant_id: str, statuses: list[str], limit: int = 200, offset: int = 0
+) -> list[Recommendation]:
+    """Console-side multi-status read (dashboard's Actions view groups
+    PENDING_APPROVAL/APPROVED/REJECTED/DELIVERED into one lifecycle)."""
+    stmt = (
+        select(Recommendation)
+        .where(Recommendation.tenant_id == tenant_id, Recommendation.status.in_(statuses))
+        .order_by(Recommendation.created_at)
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(session.execute(stmt).scalars().all())
+
+
 def list_approved(session: Session, *, tenant_id: str, limit: int = 50, offset: int = 0) -> list[Recommendation]:
     """Backs `GET /v1/recommendations?status=APPROVED` -- the only status
     value the ingestion-side pull endpoint accepts."""

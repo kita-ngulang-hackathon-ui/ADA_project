@@ -9,7 +9,7 @@ recommendations (requirement 5). Plain Python, no graph database (ADR-004).
 - Imports: `core_contracts` only. No I/O.
 - Counterparty data is structural only: active/inactive and frequency.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

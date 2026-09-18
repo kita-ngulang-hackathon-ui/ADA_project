@@ -5,12 +5,14 @@
 import Link from "next/link";
 import { useActions } from "@/components/actions-provider";
 import { StatusBadge } from "@/components/action-badges";
-import SyntheticDataBanner from "@/components/synthetic-data-banner";
-import { TOTAL_CUSTOMERS, formatReductionPp, getForecast } from "@/lib/forecast";
+import { formatReductionPp } from "@/lib/forecast";
 import { formatDate, formatNumber } from "@/lib/mock-data";
 
 export default function ActionsOverviewPage() {
-  const { ongoing, history, toggleStep, complete } = useActions();
+  const { ongoing, history, toggleStep, complete, getForecast, totalCustomers, loading, error } = useActions();
+
+  if (loading) return <div className="empty-state">Loading live data from the console API…</div>;
+  if (error) return <div className="empty-state">Couldn&apos;t reach the console API: {error}</div>;
 
   return (
     <>
@@ -20,8 +22,6 @@ export default function ActionsOverviewPage() {
         </h1>
         <p className="page-subtitle">Follow ongoing actions and look back on past decisions</p>
       </header>
-
-      <SyntheticDataBanner />
 
       <section className="mb-8">
         <div className="section-header">
@@ -148,7 +148,7 @@ export default function ActionsOverviewPage() {
                       <td className="whitespace-nowrap">
                         {isCompleted && actual !== undefined
                           ? `${formatNumber(actual)} customers (${formatReductionPp(
-                              (actual / TOTAL_CUSTOMERS) * 100,
+                              (actual / totalCustomers) * 100,
                             )})`
                           : isCompleted
                             ? "Measuring…"

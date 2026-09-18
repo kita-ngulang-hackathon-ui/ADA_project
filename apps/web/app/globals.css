@@ -999,22 +999,6 @@ a {
   cursor: pointer;
 }
 
-/* Synthetic data banner (honesty rule) */
-
-.synthetic-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  border: 1px solid rgba(212, 160, 23, 0.35);
-  border-radius: var(--radius);
-  padding: 10px 14px;
-  background: rgba(244, 197, 66, 0.14);
-  color: #7a5c07;
-  font-size: 13px;
-  font-weight: 700;
-}
-
 /* ---------------------------------------------------------------
    Login
    --------------------------------------------------------------- */

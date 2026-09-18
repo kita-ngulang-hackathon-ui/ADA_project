@@ -1,8 +1,10 @@
 "use client";
 
-// Shared action state for the console: which suggested actions were accepted,
-// dismissed or completed, and progress on ongoing ones. Mock only — persisted in
-// localStorage until the console API exists.
+// Shared console data: live recommendations grouped into "Actions", live
+// segments, and which ones the reviewer accepted/dismissed. Accept/dismiss
+// call the real console API (approve/reject every pending recommendation in
+// the group); the per-action checklist has no backend equivalent, so it
+// stays local, persisted in localStorage same as before.
 import {
   createContext,
   useCallback,
@@ -11,21 +13,31 @@ import {
   useMemo,
   useState,
 } from "react";
-import { ACTIONS, type ActionDefinition, type ActionStatus } from "@/lib/mock-data";
-import { getForecast } from "@/lib/forecast";
+import {
+  approveRecommendation,
+  listIncentives,
+  listRecommendations,
+  listSegments,
+  rejectRecommendation,
+} from "@/lib/api";
+import { computeChurnRiskSlices, computePortfolioRisk, forecastAction, sumRisk } from "@/lib/forecast";
+import { buildActions, buildSegments } from "@/lib/live-data";
+import type { ActionDefinition, ActionStatus, RiskCounts, Segment } from "@/lib/mock-data";
+import type { Incentive, Recommendation, UserSegment } from "@/lib/types";
 
-type ActionState = {
-  status: ActionStatus;
-  completedSteps: number[];
-  decidedAt?: string;
-  completedAt?: string;
-};
+type LocalOverride = { completedSteps: number[]; forcedCompleted: boolean };
 
-export type ActionView = ActionDefinition & ActionState;
+export type ActionView = ActionDefinition & { completedSteps: number[] };
 
 export type RankedAction = ActionView & { rank: number };
 
 type ActionsContextValue = {
+  loading: boolean;
+  error: string | null;
+  segments: Segment[];
+  portfolioRisk: RiskCounts;
+  churnRiskSlices: ReturnType<typeof computeChurnRiskSlices>;
+  totalCustomers: number;
   suggested: RankedAction[];
   ongoing: ActionView[];
   history: ActionView[];
@@ -34,42 +46,47 @@ type ActionsContextValue = {
   toggleStep: (id: string, step: number) => void;
   complete: (id: string) => void;
   reset: () => void;
+  getForecast: (id: string) => ReturnType<typeof forecastAction>;
 };
 
-const STORAGE_KEY = "ada.actions.v1";
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-function seedState(): Record<string, ActionState> {
-  return Object.fromEntries(
-    ACTIONS.map((action) => [
-      action.id,
-      {
-        status: action.seed.status,
-        completedSteps: action.seed.completedSteps ?? [],
-        decidedAt: action.seed.decidedAt,
-        completedAt: action.seed.completedAt,
-      },
-    ]),
-  );
-}
+const STORAGE_KEY = "ada.actions.overrides.v1";
 
 const ActionsContext = createContext<ActionsContextValue | null>(null);
 
 export function ActionsProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<Record<string, ActionState>>(seedState);
+  const [recommendations, setRecommendations] = useState<Recommendation[] | null>(null);
+  const [rawSegments, setRawSegments] = useState<UserSegment[] | null>(null);
+  const [incentives, setIncentives] = useState<Incentive[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, LocalOverride>>({});
   const [hydrated, setHydrated] = useState(false);
 
-  // Restore after mount so server and first client render match.
+  const refetch = useCallback(async () => {
+    try {
+      const [recs, segs, incs] = await Promise.all([
+        listRecommendations(["PENDING_APPROVAL", "APPROVED", "REJECTED", "DELIVERED"]),
+        listSegments(),
+        listIncentives(),
+      ]);
+      setRecommendations(recs);
+      setRawSegments(segs);
+      setIncentives(incs);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load console data");
+    }
+  }, []);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        // Merge onto the seed so actions added to the mock data still appear.
-        setState({ ...seedState(), ...JSON.parse(stored) });
-      }
+      if (stored) setOverrides(JSON.parse(stored));
     } catch {
-      // Storage blocked or corrupt — keep the seed.
+      // Storage blocked or corrupt — start empty.
     }
     setHydrated(true);
   }, []);
@@ -77,60 +94,88 @@ export function ActionsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
     } catch {
-      // Ignore: state still works for this session.
+      // Ignore: overrides still work for this session.
     }
-  }, [state, hydrated]);
+  }, [overrides, hydrated]);
 
-  const update = useCallback(
-    (id: string, change: (current: ActionState) => ActionState) =>
-      setState((previous) => ({ ...previous, [id]: change(previous[id]) })),
+  const setOverride = useCallback(
+    (id: string, change: (current: LocalOverride) => LocalOverride) =>
+      setOverrides((previous) => ({
+        ...previous,
+        [id]: change(previous[id] ?? { completedSteps: [], forcedCompleted: false }),
+      })),
     [],
   );
 
   const accept = useCallback(
-    (id: string) =>
-      update(id, (current) => ({ ...current, status: "ongoing", decidedAt: today() })),
-    [update],
+    (id: string) => {
+      const pendingIds = (recommendations ?? [])
+        .filter((r) => r.incentiveCode === id && r.status === "PENDING_APPROVAL")
+        .map((r) => r.id);
+      Promise.all(pendingIds.map((recId) => approveRecommendation(recId)))
+        .then(refetch)
+        .catch((err) => setError(err instanceof Error ? err.message : "Approve failed"));
+    },
+    [recommendations, refetch],
   );
 
   const dismiss = useCallback(
-    (id: string) =>
-      update(id, (current) => ({ ...current, status: "dismissed", decidedAt: today() })),
-    [update],
+    (id: string) => {
+      const pendingIds = (recommendations ?? [])
+        .filter((r) => r.incentiveCode === id && r.status === "PENDING_APPROVAL")
+        .map((r) => r.id);
+      Promise.all(pendingIds.map((recId) => rejectRecommendation(recId)))
+        .then(refetch)
+        .catch((err) => setError(err instanceof Error ? err.message : "Reject failed"));
+    },
+    [recommendations, refetch],
   );
 
   const toggleStep = useCallback(
     (id: string, step: number) =>
-      update(id, (current) => ({
+      setOverride(id, (current) => ({
         ...current,
         completedSteps: current.completedSteps.includes(step)
           ? current.completedSteps.filter((item) => item !== step)
           : [...current.completedSteps, step],
       })),
-    [update],
+    [setOverride],
   );
 
   const complete = useCallback(
-    (id: string) =>
-      update(id, (current) => ({ ...current, status: "completed", completedAt: today() })),
-    [update],
+    (id: string) => setOverride(id, (current) => ({ ...current, forcedCompleted: true })),
+    [setOverride],
   );
 
-  const reset = useCallback(() => setState(seedState()), []);
+  const reset = useCallback(() => setOverrides({}), []);
 
   const value = useMemo<ActionsContextValue>(() => {
-    const views: ActionView[] = ACTIONS.map((action) => ({ ...action, ...state[action.id] }));
+    const segments = rawSegments ? buildSegments(rawSegments) : [];
+    const actions =
+      recommendations && incentives && rawSegments
+        ? buildActions(recommendations, incentives, rawSegments)
+        : [];
 
-    // Rank pending actions by forecasted customers leaving high risk.
+    const views: ActionView[] = actions.map((action) => {
+      const override = overrides[action.id];
+      const status: ActionStatus = override?.forcedCompleted ? "completed" : action.status;
+      return {
+        ...action,
+        status,
+        completedAt: override?.forcedCompleted ? (action.completedAt ?? new Date().toISOString().slice(0, 10)) : action.completedAt,
+        completedSteps: override?.completedSteps ?? [],
+      };
+    });
+
+    const forecasts = new Map(actions.map((action) => [action.id, forecastAction(action, segments)]));
+    const getForecast = (id: string) =>
+      forecasts.get(id) ?? { current: { low: 0, medium: 0, high: 0 }, forecast: { low: 0, medium: 0, high: 0 }, customersLeavingHighRisk: 0, highRiskReductionPp: 0, segments: [] };
+
     const suggested = views
       .filter((action) => action.status === "suggested")
-      .sort(
-        (a, b) =>
-          getForecast(b.id).customersLeavingHighRisk -
-          getForecast(a.id).customersLeavingHighRisk,
-      )
+      .sort((a, b) => getForecast(b.id).customersLeavingHighRisk - getForecast(a.id).customersLeavingHighRisk)
       .map((action, index) => ({ ...action, rank: index + 1 }));
 
     const ongoing = views
@@ -139,12 +184,28 @@ export function ActionsProvider({ children }: { children: React.ReactNode }) {
 
     const history = views
       .filter((action) => action.status === "completed" || action.status === "dismissed")
-      .sort((a, b) =>
-        (b.completedAt ?? b.decidedAt ?? "").localeCompare(a.completedAt ?? a.decidedAt ?? ""),
-      );
+      .sort((a, b) => (b.completedAt ?? b.decidedAt ?? "").localeCompare(a.completedAt ?? a.decidedAt ?? ""));
 
-    return { suggested, ongoing, history, accept, dismiss, toggleStep, complete, reset };
-  }, [state, accept, dismiss, toggleStep, complete, reset]);
+    const portfolioRisk = computePortfolioRisk(segments);
+
+    return {
+      loading: recommendations === null || rawSegments === null || incentives === null,
+      error,
+      segments,
+      portfolioRisk,
+      churnRiskSlices: computeChurnRiskSlices(segments),
+      totalCustomers: sumRisk(portfolioRisk),
+      suggested,
+      ongoing,
+      history,
+      accept,
+      dismiss,
+      toggleStep,
+      complete,
+      reset,
+      getForecast,
+    };
+  }, [recommendations, rawSegments, incentives, overrides, error, accept, dismiss, toggleStep, complete, reset]);
 
   return <ActionsContext.Provider value={value}>{children}</ActionsContext.Provider>;
 }

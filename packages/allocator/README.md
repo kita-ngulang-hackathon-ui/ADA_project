@@ -8,7 +8,7 @@ everyone not selected (demo beat 3).
 ## Layer rules
 - Imports: `core_contracts` only. Pure Python, no solver dependency (ADR-011).
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

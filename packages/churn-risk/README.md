@@ -9,7 +9,7 @@ is what lets the feedback loop improve scores without retraining (requirement 11
 - Model weights path is given by the caller (the worker). CPU only.
 - Context rows must all belong to **one tenant** (no cross-client sharing, §4).
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

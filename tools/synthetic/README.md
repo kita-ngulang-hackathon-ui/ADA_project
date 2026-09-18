@@ -3,12 +3,18 @@
 Deterministic synthetic dataset generator for the demo. All demo data is
 synthetic and must be labeled as such wherever performance is shown (§4).
 
+> **Status: not implemented.** `generate.py` and `load_fixture.py` are stubs.
+> The demo is seeded from the hand-authored files in `fixtures/` plus the live
+> event stream from the `bank_demo` repository, which posts real HTTP events
+> into the ingestion API. The table below is the intended design, not what
+> exists today.
+
 ## Rules
 - Seeded by `SYNTHETIC_SEED`. Same seed, same bytes. The committed fixture is regenerated only on purpose.
 - Output goes to `fixtures/` and is loaded by `make seed`.
 - Planted patterns exist so the demo is reproducible; the pipeline must still **discover** them from data, never read the plant labels.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

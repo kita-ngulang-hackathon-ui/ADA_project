@@ -75,16 +75,27 @@ class RecommendationList(BaseModel):
     next_cursor: str | None = None
 
 
+_VALID_STATUSES = {"DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED", "EXPIRED", "DELIVERED"}
+
+
 @router.get("/recommendations")
 def list_recommendations(
+    status: list[str] | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     cursor: int = Query(default=0, ge=0),
     console: ConsoleSession = Depends(require_console_reviewer),
 ) -> RecommendationList:
-    """Pending approval queue (DEMO_SCRIPT beat 4: "everything sits in
-    PENDING_APPROVAL")."""
+    """Pending approval queue by default (DEMO_SCRIPT beat 4: "everything
+    sits in PENDING_APPROVAL"); pass one or more `status` values to widen it
+    (the console's Actions view needs APPROVED/REJECTED/DELIVERED too)."""
     with db_for_tenant(console.tenant_id) as session:
-        rows = recommendations_repo.list_pending(session, tenant_id=console.tenant_id, limit=limit, offset=cursor)
+        if status:
+            statuses = [s for s in status if s in _VALID_STATUSES]
+            rows = recommendations_repo.list_by_statuses(
+                session, tenant_id=console.tenant_id, statuses=statuses, limit=limit, offset=cursor
+            )
+        else:
+            rows = recommendations_repo.list_pending(session, tenant_id=console.tenant_id, limit=limit, offset=cursor)
     next_cursor = str(cursor + limit) if len(rows) == limit else None
     return RecommendationList(items=[_to_out(r) for r in rows], next_cursor=next_cursor)
 

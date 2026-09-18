@@ -7,7 +7,7 @@ run passes to churn-risk and ranker as TabPFN context. No retraining.
 ## Layer rules
 - Imports: `core_contracts` only. No I/O.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

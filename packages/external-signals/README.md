@@ -8,7 +8,7 @@ signal that applies to a user's client/region/cohort (requirement 2).
   (canned fixture or live source) and passes items in.
 - Never resolve a signal to an individual user or counterparty (§4).
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

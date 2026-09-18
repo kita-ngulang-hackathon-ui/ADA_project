@@ -10,7 +10,7 @@ Row-Level Security, and repositories. Only `services/api` and
 - Every domain table has `tenant_id UUID NOT NULL` and an RLS policy.
 - Repositories take a session that already has the tenant set. They never accept a raw tenant filter from the caller as the only guard.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

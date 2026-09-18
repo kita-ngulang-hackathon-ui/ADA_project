@@ -1,36 +1,47 @@
 # apps/web (L4)
 
-Next.js 15 (App Router) + TypeScript + Tailwind + shadcn/ui + Recharts. One app
-serves two surfaces that talk only to the console API:
+The ops console. Next.js 15 (App Router), React 19, TypeScript, Tailwind 4, Recharts.
 
-1. **Ops console** — the fintech ops reviewer: users at risk, allocation, approval, measurement.
-2. **Simulated client surface** — shows what the client app would display once a recommendation is `APPROVED`. It pulls approved recommendations; it never approves anything.
+Talks only to the console API (`/console/v1`) over `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`. No direct database access. It is a read-and-approve view over the same state the API serves (requirement 8), not a separate system.
 
-The dashboard is a read view over the same database state as the API (requirement 8), not a separate system.
+```bash
+pnpm install
+pnpm dev          # http://localhost:3000
+pnpm typecheck
+pnpm build
+```
 
-## Layer rules
-- Talks only to `NEXT_PUBLIC_API_BASE_URL` (`/console/v1`). No direct DB access.
-- Fonts self-hosted in `public/fonts` (no Google Fonts at runtime, offline demo).
-- Every screen that shows performance numbers shows the synthetic data banner (`NEXT_PUBLIC_SYNTHETIC_DATA_BANNER`).
+The console signs in automatically as the first reviewer in `CONSOLE_DEMO_REVIEWERS` for the demo tenant; there is no login screen yet.
 
-## Files to implement
+## Wired to live data
 
-| File | What to implement |
+| Route | What it shows |
 |---|---|
-| `app/layout.tsx` | Root layout, nav, synthetic-data banner, tenant switcher (wallet / paylater demo tenants). |
-| `app/page.tsx` | Overview: pipeline run button + stage progress, counts by segment and pattern. |
-| `app/users/[pseudonym]/page.tsx` | User detail: churn risk, `delta_stability` chart (Recharts), `pattern_type` badge, external signal context, impact segment, reasons. Demo beats 1–2. |
-| `app/allocation/page.tsx` | Budget input, run allocation, selected vs excluded table with exclusion reasons and runner-ups. Demo beat 3. |
-| `app/ops/recommendations/page.tsx` | Pending approval queue. |
-| `app/ops/recommendations/[id]/page.tsx` | Detail with narration (LLM or TEMPLATE label), top pick + runner-up, approve / reject with note. Demo beat 4. |
-| `app/client-surface/page.tsx` | Simulated fintech app screen showing approved incentives; sends delivery-ack. Demo beat 5. |
-| `app/measurement/page.tsx` | Three-arm comparison (CONTROL / NAIVE / ENGINE), lift charts, "new labeled examples added" counter. Demo beat 6. |
-| `lib/api.ts` | Typed fetch client for console endpoints, error envelope handling, cursor pagination. |
-| `lib/types.ts` | TypeScript mirrors of API response shapes. |
-| `components/` | Shared UI (see `components/README.md`). |
+| `/dashboard` | Churn-risk donut and the segment split, both computed from real churn scores and real 30-day transaction volume. Plus the top-ranked pending actions. |
+| `/suggested-actions` | Pending recommendation groups, ranked. Expanding one shows its forecast effect on churn risk and per segment. **Accept** approves every pending recommendation in the group through the real API; **Dismiss** rejects them. |
+| `/actions` | Accepted groups with their checklists, and the history of completed and dismissed ones. |
 
-## Tests to write
-- Playwright smoke test through the six demo beats against the seeded demo (optional if time allows).
+## Still stubs
+
+`/allocation`, `/measurement`, `/client-surface`, `/ops/recommendations`, `/ops/recommendations/[id]`, `/users/[pseudonym]` render a placeholder. They are not linked in the sidebar.
+
+## How live data reaches the screens
+
+The pipeline recommends per user or per circle, one incentive at a time; it has no notion of a "campaign" or of RFM segments. Two adapters bridge that gap, and both are honest about it:
+
+```
+lib/api.ts           typed fetch client, session bootstrap, error envelope -> ApiError
+lib/types.ts         TypeScript mirrors of the console API responses
+lib/live-data.ts     API shapes -> Segment[] / ActionDefinition[]
+lib/forecast.ts      portfolio totals and per-action forecasts
+lib/mock-data.ts     shared types, segment names, formatters (no data)
+components/actions-provider.tsx   fetches once, groups, exposes accept/dismiss
+```
+
+- **Segments** come from `GET /console/v1/segments`, which buckets real churn risk into terciles and real `canonical_events.amount_idr` into spend tiers. The RFM-style names are a presentation choice over real numbers.
+- **Actions** are real recommendations grouped by `incentive_code`. Member counts, costs and statuses are real; the summary text is the real LLM or template narration attached to a member recommendation. The "customers leaving high risk" forecast assumes one risk-band improvement per targeted customer — a portfolio rollup for the chart, not a prediction the pipeline makes.
+- The per-action checklist has no backend equivalent and is stored in `localStorage`.
 
 ## Related
-Requirement 12 and demo narrative §7; DEMO_SCRIPT in the spec.
+
+Requirement 12 and the demo narrative in the spec.

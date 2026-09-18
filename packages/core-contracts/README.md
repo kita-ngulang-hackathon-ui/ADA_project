@@ -8,7 +8,7 @@ this one. This package depends on nothing in the workspace.
 - No I/O, no database, no HTTP, no `os.environ`.
 - Keep it small. Add a type here only when two or more packages need it.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

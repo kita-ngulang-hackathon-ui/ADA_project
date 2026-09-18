@@ -8,7 +8,7 @@ prompt, the validator, and the deterministic template fallback.
 ## Layer rules
 - Imports: `core_contracts` only. No HTTP, no LLM SDK.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

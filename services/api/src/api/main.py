@@ -35,6 +35,7 @@ from api.routers.console import (
     measurement,
     pipeline,
     recommendations,
+    segments,
     tenants,
     users,
 )
@@ -49,7 +50,7 @@ _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 def create_app() -> FastAPI:
     settings = get_settings()
 
-    app = FastAPI(title="[PROJECT NAME TBD] API", version="0.2.0")
+    app = FastAPI(title="ADA Solutions API", version="0.2.0")
 
     app.add_middleware(
         CORSMiddleware,
@@ -101,6 +102,7 @@ def create_app() -> FastAPI:
     app.include_router(pipeline.router)
     app.include_router(allocations.router)
     app.include_router(recommendations.router)
+    app.include_router(segments.router)
     app.include_router(measurement.router)
     app.include_router(feedback.router)
     app.include_router(audit.router)

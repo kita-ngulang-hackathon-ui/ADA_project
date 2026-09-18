@@ -8,7 +8,7 @@ This is the **only** package allowed to see raw user identifiers.
 - Imports: `core_contracts` only. No I/O. The HMAC secret is passed in by the caller.
 - No other package may import `pseudonymize` (enforced by `.importlinter`).
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

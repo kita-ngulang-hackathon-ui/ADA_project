@@ -1,4 +1,4 @@
-# Makefile for [PROJECT NAME TBD]. Run `make help`.
+# Makefile for ADA Solutions. Run `make help`.
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 COMPOSE := docker compose

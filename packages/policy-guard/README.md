@@ -8,7 +8,7 @@ Decision Engine stage 1: hard filters that run **before** any model ranking
 - Every candidate gets an explicit `ALLOW` or `DENY` with a rule code. Denials
   are stored (`policy_decisions` table) so the audit trail shows them.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|

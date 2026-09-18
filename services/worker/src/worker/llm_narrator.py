@@ -6,6 +6,7 @@ accept. Any failure, timeout, or validator rejection falls back to the template.
 """
 import logging
 import time
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from explain import build_prompt, fact_sheet_hash, render_template, validate_narration
@@ -20,6 +21,13 @@ class HttpNarrator:
     def __init__(self, *, base_url: str, model: str, api_key: str | None, timeout_s: float,
                  temperature: float = 0, max_tokens: int = 220,
                  max_retries: int = 3, retry_backoff_s: float = 2.0) -> None:
+        # base_url may itself carry a query string (e.g. a tunnel access
+        # token that must ride on every request) -- append the path ahead of
+        # that query string rather than after it, or the query breaks.
+        parts = urlsplit(base_url)
+        self._url_scheme, self._url_netloc = parts.scheme, parts.netloc
+        self._url_path = parts.path.rstrip("/")
+        self._url_query = parts.query
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
@@ -30,6 +38,11 @@ class HttpNarrator:
         self.retry_backoff_s = retry_backoff_s
 
     def narrate(self, system: str, user: str) -> str:
+        url = urlunsplit((
+            self._url_scheme, self._url_netloc,
+            self._url_path + "/chat/completions",
+            self._url_query, "",
+        ))
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         payload = {
             "model": self.model,
@@ -37,11 +50,15 @@ class HttpNarrator:
             "max_tokens": self.max_tokens,
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
+            # Qwen3 reasoning models emit chain-of-thought into a separate
+            # reasoning_content field and leave `content` empty until it's
+            # done; this flag skips that. Other OpenAI-compatible backends
+            # ignore the unrecognized field.
+            "chat_template_kwargs": {"enable_thinking": False},
         }
         for attempt in range(self.max_retries + 1):
             response = httpx.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers, timeout=self.timeout_s, json=payload,
+                url, headers=headers, timeout=self.timeout_s, json=payload,
             )
             # Hosted free tiers rate-limit hard; a short wait recovers the call
             # instead of silently degrading the whole run to template text.

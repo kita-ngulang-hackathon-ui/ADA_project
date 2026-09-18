@@ -20,7 +20,7 @@ reading/writing the DB, fetching the external feed, calling the LLM.
 - May import every L1 package and `persistence`. Connects as `app_worker` DB role.
 - Never import FastAPI or anything from `services/api`.
 
-## Files to implement
+## Files
 
 | File | What to implement |
 |---|---|
@@ -30,7 +30,7 @@ reading/writing the DB, fetching the external feed, calling the LLM.
 | `src/worker/feed_adapter.py` | `load_feed()`: `EXTERNAL_SIGNAL_SOURCE=canned` reads `fixtures/external/*.json`; `live` fetches from `EXTERNAL_SIGNAL_LIVE_BASE_URL` with a short timeout and falls back to the last snapshot, then to canned. Never blocks the pipeline. |
 | `src/worker/llm_narrator.py` | Implements `explain.narrator_protocol.Narrator` with `httpx`. Provider/model from `EXPLAIN_LLM_*` (open decision). Timeout `EXPLAIN_LLM_TIMEOUT_S`, temperature 0. Cache by `fact_sheet_hash`. Any failure or validator rejection falls back to `explain.template`. `EXPLAIN_LLM_ENABLED=false` means template only (offline demo). |
 | `src/worker/store.py` | `PipelineStore` Protocol: everything the pipeline reads and writes. No approve/reject/deliver method exists. |
-| `src/worker/memory_store.py` | `InMemoryStore` implementing the Protocol, tenant-isolated. Used by tests and the offline CLI until the Postgres store lands. |
+| `src/worker/memory_store.py` | `InMemoryStore` implementing the Protocol, tenant-isolated. Used by tests and the offline CLI; `postgres_store.py` is the one the deployed worker runs on. |
 | `src/worker/churn_scorer.py` | `ChurnRiskScorer`: verifies artifact hashes and schema, fits TabPFN once on `split == "context"` rows, validates candidates, returns `{user_id, churn_risk, as_of}`. `python -m worker.churn_scorer --verify` checks the bundle. Needs `TABPFN_TOKEN` (or a cached checkpoint); for GPU install the cu128 torch wheel first. |
 | `src/worker/outcomes.py` | Turn outcome events into labeled examples via `feedback`, persist them, update the counter. Runs as the pipeline's FEEDBACK stage, before anything scores. |
 

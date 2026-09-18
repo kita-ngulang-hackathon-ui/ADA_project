@@ -8,14 +8,13 @@ import { useActions, type RankedAction } from "@/components/actions-provider";
 import { RankBadge } from "@/components/action-badges";
 import RiskBars from "@/components/charts/risk-bars";
 import SegmentImpactChart from "@/components/charts/segment-impact-chart";
-import SyntheticDataBanner from "@/components/synthetic-data-banner";
-import { formatReductionPp, getForecast } from "@/lib/forecast";
+import { formatReductionPp } from "@/lib/forecast";
 import { formatNumber } from "@/lib/mock-data";
 
 type Notice = { kind: "accepted" | "dismissed"; title: string };
 
 export default function SuggestedActionsPage() {
-  const { suggested, accept, dismiss } = useActions();
+  const { suggested, accept, dismiss, getForecast, loading, error } = useActions();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -46,6 +45,9 @@ export default function SuggestedActionsPage() {
     setNotice({ kind: "dismissed", title: action.title });
   }
 
+  if (loading) return <div className="empty-state">Loading live data from the console API…</div>;
+  if (error) return <div className="empty-state">Couldn&apos;t reach the console API: {error}</div>;
+
   return (
     <>
       <header className="page-header">
@@ -56,8 +58,6 @@ export default function SuggestedActionsPage() {
           {suggested.length} pending, ranked by forecasted customers leaving high churn risk
         </p>
       </header>
-
-      <SyntheticDataBanner />
 
       {notice && (
         <div className="notice" role="status">
