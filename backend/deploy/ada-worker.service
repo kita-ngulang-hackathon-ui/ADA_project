@@ -1,0 +1,51 @@
+# systemd unit for the pipeline worker.
+#
+# Install:
+#   sudo cp deploy/ada-worker.service /etc/systemd/system/
+#   sudo cp deploy/worker.env.example /opt/ada/backend/deploy/worker.env
+#   sudo $EDITOR /opt/ada/backend/deploy/worker.env     # set DATABASE_URL
+#   sudo chmod 600 /opt/ada/backend/deploy/worker.env
+#   sudo systemctl daemon-reload && sudo systemctl enable --now ada-worker
+
+[Unit]
+Description=ADA retention engine pipeline worker
+After=network-online.target postgresql.service ada-api.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=ada
+Group=ada
+
+# Mandatory. worker/settings.py loads env_file=".env" and resolves its data
+# paths relative to the working directory:
+#   external_signal_fixture_dir   fixtures/external
+#   churn_scorer_artifact_dir     artifacts
+#   churn_scorer_mapping_path     fixtures/churn_scorer_mapping.json
+# Start from anywhere else and the scorer bundle will not be found.
+WorkingDirectory=/opt/ada/backend
+
+# The worker must connect as app_worker, not app_console. Row-level security
+# and the approval grants depend on it; docker-compose.yml does this same
+# override for the container path. A real process environment variable wins
+# over the value in .env, which is exactly what this file is for.
+EnvironmentFile=/opt/ada/backend/deploy/worker.env
+
+ExecStart=/opt/ada/backend/.venv/bin/python -m worker.main
+
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=60
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ada-worker
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

@@ -2,26 +2,10 @@
 .claude/
 REQUIREMENTS (1).md
 
-
 # Secrets
 .env
 .env.*
 !.env.example
 
-__pycache__/
-*.pyc
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
+# Stray root-level Python venv from before the backend/ split
 .venv/
-*.egg-info/
-
-# Node / Next.js
-node_modules/
-apps/web/.next/
-
-# Env
-.env
-

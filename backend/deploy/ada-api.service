@@ -1,0 +1,42 @@
+# systemd unit for the FastAPI console/ingest API.
+#
+# Install:
+#   sudo cp deploy/ada-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now ada-api
+#
+# Adjust User, Group and the /opt/ada/backend paths if you deploy elsewhere.
+
+[Unit]
+Description=ADA retention engine API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=ada
+Group=ada
+
+# Mandatory, not cosmetic. api/settings.py loads env_file=".env" relative to the
+# working directory, so starting from anywhere else means no configuration.
+WorkingDirectory=/opt/ada/backend
+
+ExecStart=/opt/ada/backend/.venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000
+
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ada-api
+
+# Hardening. ReadWritePaths stays empty because the API only reads from its
+# working directory; add paths here if that ever changes.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
